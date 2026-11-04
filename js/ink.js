@@ -23,7 +23,9 @@ const alphaOf=s=>s.o!=null?s.o:KINDS[kindOf(s)].o;
 const flowOf=s=>s.f!=null?s.f:100;   // traços antigos: tinta cheia
 const ENGINE='perfect-freehand-1.2.3';
 const isContinuous=s=>['esfero','fina'].includes(kindOf(s));
-const usesPerfect=s=>!isContinuous(s)&&s.engine===ENGINE&&!s.shape&&kindOf(s)!=='hl'&&!['dot','dash'].includes(s.ls)&&!!window.PerfectFreehand;
+const variableInk=s=>['pincel','tinteiro'].includes(kindOf(s));
+const solidInk=s=>isContinuous(s)||variableInk(s);
+const usesPerfect=s=>!isContinuous(s)&&(s.engine===ENGINE||variableInk(s))&&!s.shape&&kindOf(s)!=='hl'&&!['dot','dash'].includes(s.ls)&&!!window.PerfectFreehand;
 
 /* ---------- Estabilizador ----------
    Duas etapas com efeitos diferentes:
@@ -67,7 +69,7 @@ class Stabilizer{
 function samplesOf(s){
   const st=s.s||2,p=s.p,n=p.length/st;
   const X=[],Y=[],P=[],A=[],Z=[];
-  if(usesPerfect(s)){for(let i=0;i<n;i++){X.push(p[i*st]);Y.push(p[i*st+1]);P.push(st>=3?clamp(p[i*st+2]/100,0,1):.5);A.push(st>=5?p[i*st+3]:90);Z.push(st>=5?p[i*st+4]:45)}return {X,Y,P,A,Z}}
+  if(usesPerfect(s)&&!variableInk(s)){for(let i=0;i<n;i++){X.push(p[i*st]);Y.push(p[i*st+1]);P.push(st>=3?clamp(p[i*st+2]/100,0,1):.5);A.push(st>=5?p[i*st+3]:90);Z.push(st>=5?p[i*st+4]:45)}return {X,Y,P,A,Z}}
   if(s.shape==='line'||s.shape==='rectangle'){for(let i=0;i<n;i++){X.push(p[i*st]);Y.push(p[i*st+1]);P.push(.5);A.push(90);Z.push(45)}return {X,Y,P,A,Z}}
   const get=(i,j)=>p[clamp(i,0,n-1)*st+j];
   const pr=i=>st>=3?get(i,2)/100:.5, al=i=>st>=5?get(i,3):90, az=i=>st>=5?get(i,4):45;
@@ -237,7 +239,7 @@ function layer(w,h){if(!scratch)scratch=document.createElement('canvas');if(scra
 /* ---------- Desenho de um traço ----------
    ctx deve estar sem transformação; k = pixels por unidade da página. */
 function draw(ctx,s,k,ox,oy){
-  const g=geom(s),K=KINDS[g.kind],continuous=isContinuous(s),a=alphaOf(s)*(continuous?flowOf(s)/100:1),f=continuous?1:flowOf(s)/100;
+  const g=geom(s),K=KINDS[g.kind],continuous=solidInk(s),a=alphaOf(s)*(continuous?flowOf(s)/100:1),f=continuous?1:flowOf(s)/100;
   const tx=-(ox||0)*k,ty=-(oy||0)*k;
   const simple=a>=1&&f>=.995&&g.kind!=='lapis';
   const paint=(c)=>{
@@ -247,7 +249,7 @@ function draw(ctx,s,k,ox,oy){
     else if(g.uniform){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;c.stroke(g.path)}
     else{c.fillStyle=s.c;c.fill(g.path)}
   };
-  if(simple){ctx.save();ctx.setTransform(k,0,0,k,tx,ty);paint(ctx);ctx.restore();return}
+  if(simple||solidInk(s)){ctx.save();ctx.setTransform(k,0,0,k,tx,ty);ctx.globalAlpha=a;paint(ctx);ctx.restore();return}
   const W=ctx.canvas.width,H=ctx.canvas.height;
   const bx=Math.max(0,Math.floor(g.box[0]*k+tx)),by=Math.max(0,Math.floor(g.box[1]*k+ty));
   const bw=Math.min(W,Math.ceil(g.box[2]*k+tx))-bx,bh=Math.min(H,Math.ceil(g.box[3]*k+ty))-by;
@@ -282,8 +284,8 @@ function invalidate(s){cache.delete(s)}
 function svg(s){
   const g=geom(s),K=KINDS[g.kind],f=flowOf(s)/100;
   const grain=g.kind==='lapis'?K.grain*(1.15-f*.55):K.grain*(1-f)*1.6;
-  if((!g.uniform&&!g.outline)||(!isContinuous(s)&&grain>.02))return null;
-  if(g.svgPath){const color=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24';return `<path d="${g.svgPath}" fill="${color}" opacity="${clamp(alphaOf(s)*(isContinuous(s)?f:1),0,1)}"/>`}
+  if((!g.uniform&&!g.outline)||(!solidInk(s)&&grain>.02))return null;
+  if(g.svgPath){const color=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24';return `<path d="${g.svgPath}" fill="${color}" opacity="${clamp(alphaOf(s)*(solidInk(s)?f:1),0,1)}"/>`}
   const S=g.S,n=S.X.length;if(!n)return '';
   const num=v=>Number(v.toFixed(4));
   let d=`M${num(S.X[0])} ${num(S.Y[0])}`;
@@ -292,7 +294,7 @@ function svg(s){
   d+=n>1?` L${num(S.X[n-1])} ${num(S.Y[n-1])}`:` l.01 0`;
   const c=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24',w=clamp(Number(s.w)||1,.1,100);
   const dash=g.dashed?` stroke-dasharray="${s.ls==='dot'?`.001 ${w*2.8}`:`${w*5} ${w*3.6}`}"`:'';
-  return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" opacity="${clamp(alphaOf(s)*(isContinuous(s)?f:1),0,1)}" stroke-linecap="round" stroke-linejoin="round"${isContinuous(s)?' data-ink-engine="continuous"':''}${dash}${g.kind==='hl'?' style="mix-blend-mode:multiply"':''}/>`;
+  return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" opacity="${clamp(alphaOf(s)*(solidInk(s)?f:1),0,1)}" stroke-linecap="round" stroke-linejoin="round"${isContinuous(s)?' data-ink-engine="continuous"':''}${dash}${g.kind==='hl'?' style="mix-blend-mode:multiply"':''}/>`;
 }
 
 /* ---------- Fita (washi) ----------

@@ -41,3 +41,5 @@ As canetas uniformes do motor perfect-freehand usam a linha central contínua co
 Correção de continuidade: esferográfica e caneta fina usam a curva contínua anterior, independentemente da marca do motor nos dados salvos. Fluxo muda a opacidade nessas canetas, sem apagar textura. Perfect Freehand permanece nas ferramentas de largura variável. O arquivo do motor tem URL versionada para atualizar o cache do navegador.
 
 Estabilização restaurada para os parâmetros da versão continuous-3, validada no iPad pelo usuário.
+
+Pincel e tinteiro: interpolação dos pontos antes do contorno variável para reduzir bordas em bolinhas; fluxo controla opacidade sem perfurar tinta. Prévia vetorial evita rasterizar e codificar PNG a cada quadro, inclusive em traços antigos.

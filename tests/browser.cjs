@@ -14,9 +14,9 @@ async function main(){
   // Thin curved strokes must cover every column at 200% zoom, in SVG and export.
   const gaps=await page.evaluate(async()=>{
    const failures=[];
-   for(const k of ['esfero','fina'])for(const engine of [undefined,Ink.ENGINE])for(const f of [40,100]){
+   for(const k of ['esfero','fina','pincel','tinteiro'])for(const engine of [undefined,Ink.ENGINE])for(const f of [40,100]){
     const p=[];for(let x=20;x<=220;x+=2)p.push(x,60+25*Math.sin(x/40),60);
-    const st={k,engine,f,p,s:3,w:.8,o:1,c:'#000000'},scale=4;
+    const st={k,engine,f,p,s:3,w:['pincel','tinteiro'].includes(k)?4:.8,o:1,c:'#000000'},scale=4;
     for(const mode of ['canvas','svg']){
      const cv=document.createElement('canvas');cv.width=960;cv.height=400;const ctx=cv.getContext('2d');
      if(mode==='canvas')Ink.draw(ctx,st,scale);

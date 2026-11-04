@@ -26,7 +26,7 @@ const legacy=line('esfero',60);delete legacy.engine;assert.equal(Ink.geom(legacy
 for(const st of [{...line('esfero',50),shape:'line'},{...line('esfero',50),ls:'dash'},line('hl',50)])assert.equal(Ink.geom(st).outline,null,'Formas, tracejados e marca-texto preservam o comportamento');
 const live={...line('pincel',60),_live:true};const previous=Ink.geom(live).svgPath;live.p.push(400,260,80);assert.notEqual(Ink.geom(live).svgPath,previous,'A geometria acompanha os pontos de um traço em andamento');
 const final={...line('pincel',60)},preview={...final,_live:true};assert.equal(Ink.geom(final).svgPath,Ink.geom(preview).svgPath,'Os mesmos pontos não mudam de aparência quando a caneta é levantada');
-const textured={...line('pincel',60),f:60};assert.equal(Ink.svg(textured),null,'Fluxo e texturas não são descartados');
+const textured={...line('pincel',60),f:60};assert(Ink.svg(textured).includes('opacity="0.6"'),'Fluxo do pincel mantém contorno vetorial sem perfurar tinta');
 console.log('OK: perfect-freehand, pressão, espessura constante, pontos repetidos, inclinação, prévia, SVG/canvas, persistência e traços antigos.');
 
 assert(Ink.svg({...line('esfero',60),f:40}).includes('opacity="0.4"'),'Fluxo baixo na esferográfica reduz intensidade sem textura que interrompa a linha');
@@ -41,3 +41,12 @@ for(const k of ['esfero','fina'])for(const f of [40,100]){
  assert(Ink.svg(old).includes(`opacity="${f/100}"`));
 }
 
+
+for(const kind of ['pincel','tinteiro']){
+ const sparse={...line(kind,60),f:60,p:[100,200,60,140,200,60,180,200,60,220,200,60]};
+ const g=Ink.geom(sparse);assert(g.S.X.length>60,'Pontos distantes são interpolados antes do contorno variável');
+ const ctx={canvas:{width:1000,height:1414},save(){},restore(){},setTransform(){},fill(){this.painted=true}};
+ Ink.draw(ctx,sparse,3);assert(ctx.painted,'Fluxo baixo desenha diretamente sem canvas intermediário ou textura');
+ assert.equal(ctx.globalAlpha,.6);
+ const old={...sparse};delete old.engine;assert.equal(Ink.svg(old),Ink.svg(sparse),'Correção alcança pincel e tinteiro já salvos');
+}
