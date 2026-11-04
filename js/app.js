@@ -623,7 +623,11 @@ sc.addEventListener('pointerdown',e=>{
   if(S.loading||e.target.closest('.tedit'))return;
   if(e.pointerType==='touch'){
     if(act&&act.pen)return;
-    if((e.width||0)>60&&(e.height||0)>60)return;
+    /* Palma: só um contato realmente enorme é descartado. O iPad informa o
+       dedo com 40 a 90 px de largura; um limite menor jogava fora o dedo e a
+       página não rolava. Enquanto a caneta escreve, qualquer toque é ignorado
+       (linha acima), e isso já protege a escrita da palma apoiada. */
+    if((e.width||0)>140&&(e.height||0)>140)return;
     e.preventDefault();stopInertia();
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY,target:e.target});
     try{sc.setPointerCapture(e.pointerId)}catch(_){}
