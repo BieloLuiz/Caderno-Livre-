@@ -656,7 +656,7 @@ function startStroke(e){
   const stride=K.shape==='line'?2:(hasTilt?5:3);
   const st={id:uid(),engine:Ink.ENGINE,t:pen.k==='hl'?'hl':'pen',k:pen.k,c:pen.c,w:pen.w,o:pen.o,f:pen.f,s:stride,p:[],_live:true};
   act={pid:e.pointerId,pg,pen:isPen,st,stab:new Ink.Stabilizer(pen.st,LW/pageCssW),lx:x,ly:y,px:x,py:y,rx:x,ry:y,lt:e.timeStamp,pr:.62,
-    real:isPen&&S.realPressure,pred:null,hx:x,hy:y,eps:(.08+pen.st/100*.2)*LW/pageCssW};
+    real:isPen,pred:null,hx:x,hy:y,eps:(.08+pen.st/100*.2)*LW/pageCssW};
   if(act.real)st.rp=1;
   if(pen.ls&&pen.ls!=='solid')st.ls=pen.ls;
   const th=tapeAt(pg,x,y);if(th)act.tapeHit=th;
@@ -664,7 +664,7 @@ function startStroke(e){
 }
 function pushPt(x,y,ev){
   const a=act,st=a.st,r=v=>Math.round(v*10)/10;st.p.push(r(x),r(y));
-  if(st.s>=3){let pr=a.pr;if(a.real){const raw=clamp(ev.pressure||.5,.05,1);a.prr=a.prr==null?raw:a.prr*.7+raw*.3;pr=a.prr}st.p.push(Math.round(pr*100))}
+  if(st.s>=3){let pr=a.pr;if(a.real){const raw=clamp(Number.isFinite(ev.pressure)?ev.pressure:.5,.05,1);a.prr=a.prr==null?raw:a.prr*.7+raw*.3;pr=a.prr}st.p.push(Math.round(pr*100))}
   if(st.s===5){const [al,az]=tiltOf(ev);st.p.push(Math.round(al),Math.round(az))}
 }
 sc.addEventListener('pointermove',e=>{
@@ -710,7 +710,7 @@ function drawLive(){if(liveF)return;liveF=requestAnimationFrame(()=>{liveF=0;if(
   const vector=Ink.svg(s);if(vector!==null)liveSvg.innerHTML=vector;else Ink.draw(liveCv.getContext('2d'),s,liveCv.width/LW)})}
 function armHold(a){clearTimeout(a.holdT);a.holdT=setTimeout(()=>{tryLoopSelect(a);if(act===a&&S.shapes)tryShape(a)},650)}
 function commitStroke(a){
-  for(const q of (a.snapped?[]:a.stab.finish(a.rx,a.ry))){act=a;pushPt(q[0],q[1],{pressure:a.real?.5:a.pr})}act=null;
+  for(const q of (a.snapped?[]:a.stab.finish(a.rx,a.ry))){act=a;pushPt(q[0],q[1],{pressure:a.real?(a.prr??.5):a.pr})}act=null;
   delete a.st._live;
   if(!a.st.p.length)return;
   if(a.tapeHit){const b=Ink.geom(a.st).box;if(Math.hypot(b[2]-b[0],b[3]-b[1])-a.st.w<5){toggleTape(a.pg,a.tapeHit);return}}

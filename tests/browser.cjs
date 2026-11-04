@@ -27,6 +27,16 @@ async function main(){
    }
    return failures;
   });assert.deepEqual(gaps,[],'Curvas finas contínuas em SVG e canvas, novas e salvas, com fluxo baixo e cheio');
+  const loopGaps=await page.evaluate(()=>{
+   const failures=[];
+   for(const k of ['pincel','tinteiro']){
+    const p=[];for(let i=0;i<=180;i++){const t=i/180*Math.PI*4;p.push(250+135*Math.sin(t),280-210*Math.cos(t/2),Math.round(45+30*Math.sin(t*1.3)+(i%2?8:-8)))}
+    const s={k,w:k==='pincel'?14:9,s:3,p,c:'#000000',o:1,f:100};
+    const cv=document.createElement('canvas');cv.width=1000;cv.height=1200;const ctx=cv.getContext('2d');Ink.draw(ctx,s,2);
+    const g=Ink.geom(s);for(let i=8;i<g.S.X.length-8;i++){const x=Math.round(g.S.X[i]*2),y=Math.round(g.S.Y[i]*2),data=ctx.getImageData(x-2,y-2,5,5).data;let peak=0;for(let j=3;j<data.length;j+=4)peak=Math.max(peak,data[j]);if(peak<100){failures.push({k,i});break}}
+   }
+   return failures;
+  });assert.deepEqual(loopGaps,[],'Curvas fechadas e cruzamentos permanecem contínuos com pressão oscilante');
   const target=page.locator('.page').first();let r=await target.boundingBox();
   await page.mouse.move(r.x+220,r.y+150);await page.mouse.down();await page.mouse.move(r.x+390,r.y+260,{steps:35});await page.mouse.up();
   const count=await page.locator('.page .ink-vector path').count();assert(count>0);
@@ -37,6 +47,7 @@ async function main(){
   r=await page.locator('#focus-surface').boundingBox();await page.mouse.move(r.x+40,r.y+70);await page.mouse.down();await page.mouse.move(r.x+180,r.y+90,{steps:30});await page.mouse.up();await page.getByRole('button',{name:'Próxima linha ↵'}).click();await page.getByRole('button',{name:'Fechar escrita ampliada'}).click();
   await page.getByRole('button',{name:'Aumentar zoom'}).click();await page.getByRole('button',{name:'Aumentar zoom'}).click();assert(await page.locator('.ink-vector path').count()>0);
   const navigation=await page.evaluate(()=>{
+   const originalSvg=Ink.svg;let capturedPressure;Ink.svg=st=>{if(st.rp)capturedPressure=st.p[2];return originalSvg(st)};
    const surface=document.querySelector('.page .ink-vector'),scroll=document.querySelector('#scroller');
    const r=surface.getBoundingClientRect(),x=r.left+150,y=Math.max(280,r.top+120);
    const fire=(type,id,pointerType,px,py)=>surface.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType,clientX:px,clientY:py,pressure:.6,buttons:type==='pointerup'?0:1}));
@@ -48,8 +59,8 @@ async function main(){
    const moved=scroll.scrollTop>top;
    fire('pointerup',902,'touch',x,y-80);
    fire('pointerdown',903,'pen',x,y);fire('pointermove',903,'pen',x+40,y+10);fire('pointerup',903,'pen',x+40,y+10);
-   return {wrote,moved};
-  });assert(navigation.wrote,'A caneta escreve');assert(navigation.moved,'O dedo move o papel imediatamente após levantar a caneta');
+   Ink.svg=originalSvg;return {wrote,moved,capturedPressure};
+  });assert.equal(navigation.capturedPressure,60,'Pressão da primeira escrita é usada sem esperar calibração');assert(navigation.wrote,'A caneta escreve');assert(navigation.moved,'O dedo move o papel imediatamente após levantar a caneta');
   await page.screenshot({path:'/tmp/caderno-vector-desktop.png'});
   await page.getByRole('button',{name:'Voltar para os cadernos'}).click();await page.waitForSelector('#library:not([hidden])');
   await page.locator('[data-opts]').first().click();await page.locator('#nb-folder').fill('Estudos');await page.locator('#nb-favorite').check();await page.getByRole('button',{name:'Salvar',exact:true}).click();

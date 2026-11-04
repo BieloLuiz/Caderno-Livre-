@@ -45,3 +45,5 @@ Estabilização restaurada para os parâmetros da versão continuous-3, validada
 Pincel e tinteiro: interpolação dos pontos antes do contorno variável para reduzir bordas em bolinhas; fluxo controla opacidade sem perfurar tinta. Prévia vetorial evita rasterizar e codificar PNG a cada quadro, inclusive em traços antigos.
 
 Pincel e tinteiro usam uma união vetorial de discos e faixas tangentes para evitar cortes em contornos estreitos. Contato da caneta interrompe inércia; navegação por toque fica disponível ao levantar a ponta; captura perdida encerra o gesto.
+
+Motor smooth-ribbon-8: bordas quadráticas para pincel/tinteiro e suavização espacial da largura para reduzir ondulações. A pressão de PointerEvents da caneta passa a ser usada desde o primeiro traço; o fim preserva a última pressão válida. A esferográfica mantém a geometria e estabilização anteriores.

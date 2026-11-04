@@ -148,6 +148,40 @@ function radii(s,kind,S){
   for(let i=0;i<n;i++)R[i]=Math.max(.25,R[i]);
   return R;
 }
+/* Largura por distância percorrida: amostras muito próximas não podem
+   alternar entre uma ponta fina e uma grossa. Duas passagens simétricas
+   suavizam a borda sem deslocar a resposta para trás da caneta. */
+function smoothVariableRadii(S,R,w){
+  const n=R.length;if(n<2)return R;
+  const length=Math.max(1.5,w*.45);
+  for(let pass=0;pass<2;pass++){
+    for(let i=1;i<n;i++){const d=Math.hypot(S.X[i]-S.X[i-1],S.Y[i]-S.Y[i-1]);const a=1-Math.exp(-d/length);R[i]=R[i-1]+a*(R[i]-R[i-1])}
+    for(let i=n-2;i>=0;i--){const d=Math.hypot(S.X[i+1]-S.X[i],S.Y[i+1]-S.Y[i]);const a=1-Math.exp(-d/length);R[i]=R[i+1]+a*(R[i]-R[i+1])}
+  }
+  return R;
+}
+/* Faixas quadráticas sobrepostas: bordas curvas no lugar de uma sequência
+   de discos. Cada faixa tem o mesmo sentido de preenchimento para que
+   cruzamentos de letras não abram buracos. */
+function ribbonPath(S,R){
+  const n=S.X.length,num=v=>Number(v.toFixed(4)),p=(x,y)=>`${num(x)} ${num(y)}`;
+  const disk=i=>{const x=S.X[i],y=S.Y[i],r=R[i];return `M${p(x+r,y)}a${r} ${r} 0 1 1 ${-2*r} 0a${r} ${r} 0 1 1 ${2*r} 0Z`};
+  if(n<2)return n?disk(0):'';
+  const left=[],right=[];
+  for(let i=0;i<n;i++){
+    const a=Math.max(0,i-1),b=Math.min(n-1,i+1),dx=S.X[b]-S.X[a],dy=S.Y[b]-S.Y[a],d=Math.hypot(dx,dy)||1;
+    const nx=-dy/d*R[i],ny=dx/d*R[i];left.push([S.X[i]+nx,S.Y[i]+ny]);right.push([S.X[i]-nx,S.Y[i]-ny]);
+  }
+  const mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  let out=disk(0)+disk(n-1);
+  for(let i=0;i<n;i++){
+    const l0=i?mid(left[i-1],left[i]):left[i],l1=i<n-1?mid(left[i],left[i+1]):left[i];
+    const r0=i?mid(right[i-1],right[i]):right[i],r1=i<n-1?mid(right[i],right[i+1]):right[i];
+    out+=`M${p(...r0)}Q${p(...right[i])} ${p(...r1)}L${p(...l1)}Q${p(...left[i])} ${p(...l0)}Z`;
+    if(i>0&&i<n-1){const ax=S.X[i]-S.X[i-1],ay=S.Y[i]-S.Y[i-1],bx=S.X[i+1]-S.X[i],by=S.Y[i+1]-S.Y[i];if(ax*bx+ay*by<0)out+=disk(i)}
+  }
+  return out;
+}
 /* Forma do traço: união de círculos (um em cada ponto) e das faixas que os
    ligam. Como cada faixa usa só a direção do próprio trecho, curvas fechadas
    não "dobram" o contorno nem criam bicos. Pontos em trechos retos e de
@@ -211,7 +245,7 @@ function geom(s){
   const uniform=kind==='esfero'||K.shape==='line';
   let outline=null,svgPath=null;
   if(variableInk(s)&&!s.shape&&!dashed){
-    R=radii(s,kind,S);svgPath=stampPath(S,R,true);path=new Path2D(svgPath);
+    R=smoothVariableRadii(S,radii(s,kind,S),s.w);svgPath=ribbonPath(S,R);path=new Path2D(svgPath);
     let m=0;for(const r of R)m=Math.max(m,r);pad=m+1;
   }
   else if(usesPerfect(s)){
