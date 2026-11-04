@@ -606,6 +606,11 @@ function eraserDialog(){
    - contatos muito largos (palma) são ignorados.
    A página inteira usa touch-action:none: quem decide o que é rolagem é o app,
    senão o Safari rolaria a página com a própria caneta. */
+/* Registro dos últimos toques do dedo na folha, para o Testar caneta mostrar
+   o que o app decidiu (rolar, zoom ou ignorar) quando algo não funciona. */
+window.__touchLog=[];
+function touchLog(what,e){const L=window.__touchLog;L.push(what+(e&&e.type==='pointerdown'?' ('+Math.round(Math.max(e.width||0,e.height||0))+'px)':''));if(L.length>12)L.shift()}
+document.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&S.nb&&!sc.contains(e.target)&&!e.target.closest('.tray,.topbar,.dialog,.menu,.textbar'))touchLog('fora da folha: '+(e.target.id||e.target.className||e.target.tagName),e)},true);
 const touches=new Map();let act=null,gest=null,pan=null,penUpAt=0,inertia=0;
 const pvals=new Set();
 /* Pressão real só quando a caneta prova que tem: muitos valores diferentes
@@ -632,19 +637,19 @@ function toLocal(pg,e){const r=pg.el.getBoundingClientRect();return [(e.clientX-
 sc.addEventListener('pointerdown',e=>{
   if(S.loading||e.target.closest('.tedit'))return;
   if(e.pointerType==='touch'){
-    if(act&&act.pen)return;
+    if(act&&act.pen){touchLog('caneta ativa',e);return}
     /* Palma: só um contato realmente enorme é descartado. O iPad informa o
        dedo com 40 a 90 px de largura; um limite menor jogava fora o dedo e a
        página não rolava. Enquanto a caneta escreve, qualquer toque é ignorado
        (linha acima), e isso já protege a escrita da palma apoiada. */
-    if((e.width||0)>140&&(e.height||0)>140)return;
+    if((e.width||0)>140&&(e.height||0)>140){touchLog('palma',e);return}
     e.preventDefault();stopInertia();
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY,target:e.target});
     try{sc.setPointerCapture(e.pointerId)}catch(_){}
-    if(touches.size>=2){if(act)cancelStroke();pan=null;startGesture();return}
+    if(touches.size>=2){if(act)cancelStroke();pan=null;startGesture();touchLog('zoom',e);return}
     if(S.sel&&touches.size===1){const sh=selHit(e);if(sh){beginSelDrag(e,sh);return}}
-    if(S.finger&&S.active!=='text'){startStroke(e);return}
-    pan={id:e.pointerId,x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t0:e.timeStamp,vx:0,vy:0,t:e.timeStamp,target:e.target};return;
+    if(S.finger&&S.active!=='text'){touchLog('escreve',e);startStroke(e);return}
+    pan={id:e.pointerId,x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t0:e.timeStamp,vx:0,vy:0,t:e.timeStamp,target:e.target,y0:sc.scrollTop};touchLog('rola',e);return;
   }
   stopInertia();
   if(e.pointerType==='pen'){if(act)cancelStroke();notePen(e);if(gest)endGesture();touches.clear();pan=null}
@@ -774,7 +779,7 @@ function releaseTouch(e,allowInertia){
     return;
   }
   if(pan?.id!==e.pointerId)return;
-  const a=pan;pan=null;
+  const a=pan;pan=null;touchLog('soltou, andou '+Math.round(Math.abs(sc.scrollTop-a.y0))+' px',e);
   if(allowInertia){
     if(Math.hypot(e.clientX-a.sx,e.clientY-a.sy)<8&&e.timeStamp-a.t0<350){const pe=a.target.closest?.('.page');if(pe){const [x,y]=toLocal(pe._pg,e),t=tapeAt(pe._pg,x,y);if(t)toggleTape(pe._pg,t)}}
     else startInertia(a.vx,a.vy,e.timeStamp-a.t);
