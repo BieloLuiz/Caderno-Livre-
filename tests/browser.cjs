@@ -47,20 +47,23 @@ async function main(){
   r=await page.locator('#focus-surface').boundingBox();await page.mouse.move(r.x+40,r.y+70);await page.mouse.down();await page.mouse.move(r.x+180,r.y+90,{steps:30});await page.mouse.up();await page.getByRole('button',{name:'Próxima linha ↵'}).click();await page.getByRole('button',{name:'Fechar escrita ampliada'}).click();
   await page.getByRole('button',{name:'Aumentar zoom'}).click();await page.getByRole('button',{name:'Aumentar zoom'}).click();assert(await page.locator('.ink-vector path').count()>0);
   const navigation=await page.evaluate(()=>{
-   const originalSvg=Ink.svg;let capturedPressure;Ink.svg=st=>{if(st.rp)capturedPressure=st.p[2];return originalSvg(st)};
+   const originalSvg=Ink.svg;const rpSeen=[];Ink.svg=st=>{rpSeen.push(!!st.rp);return originalSvg(st)};
    const surface=document.querySelector('.page .ink-vector'),scroll=document.querySelector('#scroller');
    const r=surface.getBoundingClientRect(),x=r.left+150,y=Math.max(280,r.top+120);
-   const fire=(type,id,pointerType,px,py)=>surface.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType,clientX:px,clientY:py,pressure:.6,buttons:type==='pointerup'?0:1}));
+   const fire=(type,id,pointerType,px,py,pressure=.6)=>surface.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType,clientX:px,clientY:py,pressure,buttons:type==='pointerup'?0:1}));
    const before=surface.querySelectorAll('path').length;
    fire('pointerdown',901,'pen',x,y);fire('pointermove',901,'pen',x+40,y+30);fire('pointerup',901,'pen',x+40,y+30);
+   const constantIsReal=rpSeen.some(Boolean);rpSeen.length=0;
    const wrote=surface.querySelectorAll('path').length>before;
    const top=scroll.scrollTop;
    fire('pointerdown',902,'touch',x,y);fire('pointermove',902,'touch',x,y-80);
    const moved=scroll.scrollTop>top;
    fire('pointerup',902,'touch',x,y-80);
    fire('pointerdown',903,'pen',x,y);fire('pointermove',903,'pen',x+40,y+10);fire('pointerup',903,'pen',x+40,y+10);
-   Ink.svg=originalSvg;return {wrote,moved,capturedPressure};
-  });assert.equal(navigation.capturedPressure,60,'Pressão da primeira escrita é usada sem esperar calibração');assert(navigation.wrote,'A caneta escreve');assert(navigation.moved,'O dedo move o papel imediatamente após levantar a caneta');
+   rpSeen.length=0;fire('pointerdown',904,'pen',x,y+60,.1);for(let i=1;i<=24;i++)fire('pointermove',904,'pen',x+i*4,y+60,.1+.85*Math.abs(Math.sin(i/4)));fire('pointerup',904,'pen',x+96,y+60,0);
+   const varyingIsReal=rpSeen.some(Boolean);
+   Ink.svg=originalSvg;return {wrote,moved,constantIsReal,varyingIsReal};
+  });assert.equal(navigation.constantIsReal,false,'Pressão fixa (caneta sem sensor, ex. GD14) é simulada pela velocidade');assert.equal(navigation.varyingIsReal,true,'Pressão que varia (Apple Pencil) é usada já no primeiro traço');assert(navigation.wrote,'A caneta escreve');assert(navigation.moved,'O dedo move o papel imediatamente após levantar a caneta');
   const handoff=await page.evaluate(()=>{
    const surface=document.querySelector('.page'),sc=document.querySelector('#scroller');sc.scrollTop=300;
    const fire=(type,id,x,y)=>surface.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType:'touch',clientX:x,clientY:y,width:18,height:18}));
