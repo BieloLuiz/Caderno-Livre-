@@ -407,12 +407,12 @@ function liveClear(){const c=liveCv.getContext('2d');c.setTransform(1,0,0,1,0,0)
 /* Resolução: segue o devicePixelRatio da tela, com limite de área para não
    estourar a memória do Safari no iPad. Só as páginas perto da tela têm imagem. */
 let pageCssW=600;
-/* Densidade usada para desenhar: nunca menos que 2 (telas de iPad e celular),
-   multiplicada pelo zoom do próprio navegador quando houver, e com 25% a mais
-   de resolução para o antisserrilhamento das bordas ficar mais suave. */
+/* Desenha com 50% mais resolução em cada eixo e deixa o navegador reduzir
+   para o tamanho da tela: mais amostras suavizam diagonais e curvas finas.
+   pxFor mantém o limite de memória, inclusive em telas Retina e com zoom. */
 function renderScale(){
   const vv=window.visualViewport,z=vv&&vv.scale>1?vv.scale:1;
-  return clamp(Math.max(2,window.devicePixelRatio||1)*z,2,4.5);
+  return clamp(Math.max(2,window.devicePixelRatio||1)*z*1.5,3,6);
 }
 function pxFor(css){
   const dpr=renderScale();let w=Math.round(css*dpr);
