@@ -1207,17 +1207,26 @@ function reversals(v,thr){let cnt=0,dir=0,ext=v[0];
     else if(dir>0){if(x>ext)ext=x;else if(ext-x>thr){cnt++;dir=-1;ext=x}}
     else{if(x<ext)ext=x;else if(x-ext>thr){cnt++;dir=1;ext=x}}}
   return cnt}
+/* Rabisco de apagar: vai e volta ao longo do lado MAIOR, pelo menos 4 vezes,
+   cobrindo quase todo o comprimento a cada passada. Letra cursiva não conta:
+   ela sobe e desce (lado menor da palavra) e anda para a frente. Rabisco em
+   pé só vale quando é bem estreito, para "lll" ou "ill" não virarem rabisco. */
+function isScratch(xs,ys,L,w,h,diag){
+  if(diag<12)return false;
+  const horiz=w>=h,long=horiz?w:h,short=horiz?h:w;
+  if(!horiz&&short>long*.35)return false;
+  if(L<long*3.5)return false;
+  return reversals(horiz?xs:ys,long*.6)>=3;
+}
 let scratchHinted=false;
 function tryScratch(pg,st){
   if(!S.gest.scratch||!['esfero','fina','tinteiro'].includes(st.k))return false;
   const s=st.s||2,p=st.p,n=p.length/s;if(n<14)return false;
   const xs=[],ys=[];let L=0;for(let i=0;i<n;i++){xs.push(p[i*s]);ys.push(p[i*s+1]);if(i)L+=Math.hypot(xs[i]-xs[i-1],ys[i]-ys[i-1])}
   const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),w=x1-x0,h=y1-y0,diag=Math.hypot(w,h);
-  if(diag<12||L<diag*3)return false;
-  const rx=reversals(xs,w*.45),ry=reversals(ys,h*.45);
-  if(!(rx>=3||ry>=4))return false;
+  if(!isScratch(xs,ys,L,w,h,diag))return false;
   const inBox=(x,y)=>x>=x0-3&&x<=x1+3&&y>=y0-3&&y<=y1+3;
-  const victims=pg.strokes.filter(o=>{const os=o.s||2,op=o.p,on=op.length/os;let c=0;for(let i=0;i<on;i++)if(inBox(op[i*os],op[i*os+1]))c++;return on>0&&c>=on*.4});
+  const victims=pg.strokes.filter(o=>{const os=o.s||2,op=o.p,on=op.length/os;let c=0;for(let i=0;i<on;i++)if(inBox(op[i*os],op[i*os+1]))c++;return on>0&&c>=on*.6});
   const tv=(pg.texts||[]).filter(t=>{const b=textBox(pg,t);return inBox((b[0]+b[2])/2,(b[1]+b[3])/2)});
   if(!victims.length&&!tv.length)return false;
   const op={pg:pg.id,added:[],removed:victims.map(v=>({s:v,i:pg.strokes.indexOf(v)})).sort((a,b)=>a.i-b.i),tAdd:[],tRem:tv};
