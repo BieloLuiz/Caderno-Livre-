@@ -2,8 +2,8 @@
    Arquivos do app: tenta a rede primeiro (para receber atualizações) e usa a
    cópia guardada quando não há internet. Fontes e o gerador de PDF ficam
    guardados depois da primeira vez. */
-const V='caderno-20261104-update-13';
-const SHELL=['./','index.html','manifest.webmanifest','features.css','vendor/perfect-freehand-1.2.3.js','js/ink.js?v=update-13','js/pentest.js','js/hwr.js','js/app.js?v=update-13','icons/icon-180.png','icons/icon-192.png','icons/icon-512.png'];
+const V='caderno-20261104-stroke-gaps-14';
+const SHELL=['./','index.html','manifest.webmanifest','features.css','vendor/perfect-freehand-1.2.3.js','js/ink.js?v=stroke-gaps-14','js/pentest.js','js/hwr.js','js/app.js?v=stroke-gaps-14','icons/icon-180.png','icons/icon-192.png','icons/icon-512.png'];
 const EXTRA=['vendor/pdf.min.js','vendor/pdf.worker.min.js','vendor/jspdf.umd.min.js'];
 self.addEventListener('install',e=>{e.waitUntil((async()=>{const c=await caches.open(V);await c.addAll(SHELL);
   for(const u of EXTRA){try{await c.add(new Request(u,{mode:'cors'}))}catch(_){}}self.skipWaiting()})())});

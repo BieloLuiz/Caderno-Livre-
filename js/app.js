@@ -652,7 +652,7 @@ sc.addEventListener('pointerdown',e=>{
     pan={id:e.pointerId,x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t0:e.timeStamp,vx:0,vy:0,t:e.timeStamp,target:e.target,y0:sc.scrollTop};touchLog('rola',e);return;
   }
   stopInertia();
-  if(e.pointerType==='pen'){if(act)cancelStroke();notePen(e);if(gest)endGesture();touches.clear();pan=null}
+  if(e.pointerType==='pen'){if(act)keepOrCancel();notePen(e);if(gest)endGesture();touches.clear();pan=null}
   if(e.pointerType==='mouse'&&e.button!==0)return;
   if(S.active==='text')return;
   startStroke(e);
@@ -680,6 +680,12 @@ function startStroke(e){
   if(act.real)st.rp=1;
   if(pen.ls&&pen.ls!=='solid')st.ls=pen.ls;
   const th=tapeAt(pg,x,y);if(th)act.tapeHit=th;
+  /* Caneta que perdeu contato por um instante (comum em canetas sem sensor,
+     como a GD14, com pouca força): se voltar em menos de 45 ms perto de onde
+     parou, com a mesma caneta, o pedaço novo começa no fim do anterior e não
+     fica buraco no meio da letra. */
+  const L=lastInk;
+  if(isPen&&L&&L.pg===pg&&L.pen===S.active&&L.s===stride&&performance.now()-L.t<45&&Math.hypot(x-L.pt[0],y-L.pt[1])*pageCssW/LW<30)st.p.push(...L.pt);
   pushPt(x,y,e);drawLive();armHold(act);
 }
 function pushPt(x,y,ev){
@@ -731,6 +737,7 @@ function drawLive(){if(liveF)return;liveF=requestAnimationFrame(()=>{liveF=0;if(
   if(act.pred){const st=s.s,p=s.p.slice(-st);p[0]=Math.round(act.pred[0]*10)/10;p[1]=Math.round(act.pred[1]*10)/10;s={...s,p:s.p.concat(p)}}
   const vector=Ink.svg(s);if(vector!==null)liveSvg.innerHTML=vector;else Ink.draw(liveCv.getContext('2d'),s,liveCv.width/LW)})}
 function armHold(a){clearTimeout(a.holdT);a.holdT=setTimeout(()=>{tryLoopSelect(a);if(act===a&&S.shapes)tryShape(a)},650)}
+let lastInk=null;
 function commitStroke(a){
   for(const q of (a.snapped?[]:a.stab.finish(a.rx,a.ry))){act=a;pushPt(q[0],q[1],{pressure:a.real?(a.prr??.5):a.pr})}act=null;
   delete a.st._live;
@@ -740,6 +747,7 @@ function commitStroke(a){
   if(!a.snapped&&a.st.engine!==Ink.ENGINE)a.st.p=Ink.simplify(a.st.p,a.st.s,a.eps);
   a.pg.strokes.push(a.st);
   appendInkSvg(a.pg,a.st);
+  lastInk=a.pen?{pg:a.pg,pen:S.active,s:a.st.s,pt:a.st.p.slice(-a.st.s),t:performance.now()}:null;
   pushUndo({pg:a.pg.id,added:[a.st],removed:[]});schedulePageSave(a.pg);
   hwrStroke(a.pg,a.st);
 }
@@ -764,7 +772,7 @@ function endPointer(e){
 sc.addEventListener('pointerup',endPointer);
 sc.addEventListener('lostpointercapture',e=>{if(act?.pid===e.pointerId)endPointer(e);releaseTouch(e,false)});
 sc.addEventListener('pointercancel',e=>{
-  if(act&&e.pointerId===act.pid){if(act.pen)penUpAt=performance.now();cancelStroke()}
+  if(act&&e.pointerId===act.pid){if(act.pen)penUpAt=performance.now();keepOrCancel()}
   releaseTouch(e,false);
 });
 /* Ao tirar um dedo da pinça, o dedo que ficou continua arrastando.
@@ -784,6 +792,17 @@ function releaseTouch(e,allowInertia){
     if(Math.hypot(e.clientX-a.sx,e.clientY-a.sy)<8&&e.timeStamp-a.t0<350){const pe=a.target.closest?.('.page');if(pe){const [x,y]=toLocal(pe._pg,e),t=tapeAt(pe._pg,x,y);if(t)toggleTape(pe._pg,t)}}
     else startInertia(a.vx,a.vy,e.timeStamp-a.t);
   }
+}
+/* Traço da caneta interrompido pelo sistema (palma encostou, a caneta perdeu
+   contato, outro gesto começou): o que já foi desenhado fica na folha.
+   Só o traço feito com o dedo é descartado, porque aí a interrupção
+   normalmente é o início de um gesto de dois dedos. */
+function keepOrCancel(){
+  const a=act;
+  if(a&&a.pen&&a.st&&!a.eraser&&!a.seld&&!a.tape&&!a.laser&&!a.lasso){
+    act=null;clearTimeout(a.holdT);if(liveF){cancelAnimationFrame(liveF);liveF=0}liveClear();commitStroke(a);return;
+  }
+  cancelStroke();
 }
 function cancelStroke(){
   if(!act)return;const a=act;act=null;clearTimeout(a.holdT);if(a.seld){endSelDrag(a);return}if(a.tape){renderTapes(a.pg);return}if(a.laser){a.laser.end=performance.now();return}liveClear();
