@@ -608,10 +608,20 @@ function eraserDialog(){
    senão o Safari rolaria a página com a própria caneta. */
 const touches=new Map();let act=null,gest=null,pan=null,penUpAt=0,inertia=0;
 const pvals=new Set();
+/* Pressão real só quando a caneta prova que tem: muitos valores diferentes
+   numa faixa larga (Apple Pencil). Canetas sem sensor, como a GD14, mandam um
+   valor fixo (ex.: 12%); nelas a espessura é simulada pela velocidade.
+   Os valores do meio do traço também contam, então o Apple Pencil é
+   reconhecido já no primeiro traço. */
+function notePressure(v){
+  if(S.realPressure||!(v>0&&v<1)||Math.abs(v-.5)<.004)return;
+  pvals.add(Math.round(v*100));
+  if(pvals.size>=15){const a=[...pvals];if(Math.max(...a)-Math.min(...a)>=30){S.realPressure=true;saveDevice();if(act&&act.pen&&!act.real){act.real=true;if(act.st)act.st.rp=1}}}
+}
 function notePen(e){
   if(S.penDevice&&S.finger){S.finger=false;saveDevice();buildTray()}
   if(!S.penDevice){S.penDevice=true;S.finger=false;saveDevice();buildTray();toast('Caneta detectada. A partir de agora só a caneta escreve; o dedo rola e dois dedos dão zoom.',5000)}
-  if(!S.realPressure&&e.pressure>0&&e.pressure<1&&Math.abs(e.pressure-.5)>.004){pvals.add(Math.round(e.pressure*100));const v=[...pvals];if(pvals.size>=15&&Math.max(...v)-Math.min(...v)>=30){S.realPressure=true;saveDevice()}}
+  notePressure(e.pressure);
 }
 function tiltOf(e){
   if(e.altitudeAngle!=null&&e.altitudeAngle>0&&e.altitudeAngle<Math.PI/2-.02)return [e.altitudeAngle*180/Math.PI,((e.azimuthAngle||0)*180/Math.PI+360)%360];
@@ -661,7 +671,7 @@ function startStroke(e){
   const stride=K.shape==='line'?2:(hasTilt?5:3);
   const st={id:uid(),engine:Ink.ENGINE,t:pen.k==='hl'?'hl':'pen',k:pen.k,c:pen.c,w:pen.w,o:pen.o,f:pen.f,s:stride,p:[],_live:true};
   act={pid:e.pointerId,pg,pen:isPen,st,stab:new Ink.Stabilizer(pen.st,LW/pageCssW),lx:x,ly:y,px:x,py:y,rx:x,ry:y,lt:e.timeStamp,pr:.62,
-    real:isPen,pred:null,hx:x,hy:y,eps:(.08+pen.st/100*.2)*LW/pageCssW};
+    real:isPen&&S.realPressure,pred:null,hx:x,hy:y,eps:(.08+pen.st/100*.2)*LW/pageCssW};
   if(act.real)st.rp=1;
   if(pen.ls&&pen.ls!=='solid')st.ls=pen.ls;
   const th=tapeAt(pg,x,y);if(th)act.tapeHit=th;
@@ -689,6 +699,7 @@ sc.addEventListener('pointermove',e=>{
   if(act.laser){const [x,y]=toLocal(act.pg,e),P=act.laser.pts,l=P[P.length-1];if(Math.hypot(x-l[0],y-l[1])>1)P.push([x,y]);kickLaser();return}
   if(act.lasso){const [x,y]=toLocal(act.pg,e),l=act.pts[act.pts.length-1];if(Math.hypot(x-l[0],y-l[1])>1.5){act.pts.push([x,y]);drawLasso(act)}return}
   const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+  if(act.pen&&!S.realPressure)for(const ev of (evs.length?evs:[e]))notePressure(ev.pressure);
   const pxu=pageCssW/LW;
   for(const ev of (evs.length?evs:[e])){
     const [x,y]=toLocal(act.pg,ev);act.rx=x;act.ry=y;
