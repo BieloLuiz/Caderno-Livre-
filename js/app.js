@@ -389,7 +389,9 @@ async function openNotebook(nb,fresh){
   if(!fresh){
     toast('Abrindo páginas…',10000);
     try{
-      const datas=await Promise.all(nb.pages.map(id=>Store.getPage(id)));
+      /* Se a conta não responder em 20 s, o caderno fecha com um aviso em vez
+         de ficar "abrindo" para sempre e ignorar a caneta. */
+      const datas=await Promise.race([Promise.all(nb.pages.map(id=>Store.getPage(id))),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),20000))]);
       if(S.nb!==nb)return;
       datas.forEach((d,i)=>{const pg=S.pages[i];if(pg&&d&&Array.isArray(d.strokes)){pg.strokes=d.strokes.slice();pg.texts=Array.isArray(d.texts)?d.texts.slice():[];pg.tapes=Array.isArray(d.tapes)?d.tapes.slice():[];pg.background=d.background||null;pg.dirty=true;renderTexts(pg);renderTapes(pg)}});
        if(S.nb!==nb)return;S.loading=false;$('#toast').hidden=true;renderVisible();
@@ -635,7 +637,8 @@ function tiltOf(e){
 }
 function toLocal(pg,e){const r=pg.el.getBoundingClientRect();return [(e.clientX-r.left)/r.width*LW,(e.clientY-r.top)/r.height*LH]}
 sc.addEventListener('pointerdown',e=>{
-  if(S.loading||e.target.closest('.tedit'))return;
+  if(S.loading){if(e.pointerType!=='touch'){touchLog('caneta: ainda abrindo páginas',e);toast('Ainda abrindo as páginas deste caderno…',2500)}return}
+  if(e.target.closest('.tedit'))return;
   if(e.pointerType==='touch'){
     if(act&&act.pen){touchLog('caneta ativa',e);return}
     /* Palma: só um contato realmente enorme é descartado. O iPad informa o
@@ -654,14 +657,15 @@ sc.addEventListener('pointerdown',e=>{
   stopInertia();
   if(e.pointerType==='pen'){if(act)keepOrCancel();notePen(e);if(gest)endGesture();touches.clear();pan=null}
   if(e.pointerType==='mouse'&&e.button!==0)return;
-  if(S.active==='text')return;
+  if(S.active==='text'){touchLog('caneta: ferramenta texto',e);return}
   startStroke(e);
 });
 function startStroke(e){
   if(S.loading||!S.nb)return;
   const sh=selHit(e);if(sh){beginSelDrag(e,sh);return}
   if(S.sel){clearSel();e.preventDefault();return}
-  const pageEl=e.target.closest('.page');if(!pageEl)return;
+  const pageEl=e.target.closest('.page');if(!pageEl){touchLog('caneta fora da folha: '+(e.target.id||String(e.target.className&&e.target.className.baseVal!=null?e.target.className.baseVal:e.target.className)||e.target.tagName),e);return}
+  if(e.pointerType==='pen')touchLog('caneta: desenhando',e);
   e.preventDefault();if(editing)finishEdit();clearTimeout(hwrT);
   const pg=pageEl._pg;const [x,y]=toLocal(pg,e);
   try{sc.setPointerCapture(e.pointerId)}catch(_){}
