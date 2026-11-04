@@ -153,10 +153,12 @@ function radii(s,kind,S){
    não "dobram" o contorno nem criam bicos. Pontos em trechos retos e de
    espessura constante são descartados (interpolação adaptativa). Tudo vai
    numa forma só, preenchida de uma vez, com antisserrilhamento do navegador. */
-function stampPath(S,R){
-  const n=S.X.length,path=new Path2D();
+function stampPath(S,R,vector=false){
+  let d='';const num=v=>Number(v.toFixed(4));
+  const path=vector?{moveTo(x,y){d+=`M${num(x)} ${num(y)}`},lineTo(x,y){d+=`L${num(x)} ${num(y)}`},arc(x,y,r){d+=`a${num(r)} ${num(r)} 0 1 1 ${num(-2*r)} 0 a${num(r)} ${num(r)} 0 1 1 ${num(2*r)} 0 Z`},closePath(){d+='Z'}}:new Path2D();
+  const n=S.X.length;
   const circle=(i)=>{const r=R[i];path.moveTo(S.X[i]+r,S.Y[i]);path.arc(S.X[i],S.Y[i],r,0,Math.PI*2,false)};
-  if(n===1){circle(0);return path}
+  if(n===1){circle(0);return vector?d:path}
   const keep=[0];
   for(let i=1;i<n-1;i++){
     const j=keep[keep.length-1];const dx=S.X[i]-S.X[j],dy=S.Y[i]-S.Y[j],d=Math.hypot(dx,dy);
@@ -177,7 +179,7 @@ function stampPath(S,R){
     if(area<0)P.reverse();
     path.moveTo(P[0][0],P[0][1]);path.lineTo(P[1][0],P[1][1]);path.lineTo(P[2][0],P[2][1]);path.lineTo(P[3][0],P[3][1]);path.closePath();
   }
-  return path;
+  return vector?d:path;
 }
 /* Uma curva contínua evita as pequenas ondulações da união de carimbos na
    esferográfica. A mesma curva é usada na prévia e no traço salvo. */
@@ -208,7 +210,11 @@ function geom(s){
   const dashed=s.ls==='dot'||s.ls==='dash';
   const uniform=kind==='esfero'||K.shape==='line';
   let outline=null,svgPath=null;
-  if(usesPerfect(s)){
+  if(variableInk(s)&&!s.shape&&!dashed){
+    R=radii(s,kind,S);svgPath=stampPath(S,R,true);path=new Path2D(svgPath);
+    let m=0;for(const r of R)m=Math.max(m,r);pad=m+1;
+  }
+  else if(usesPerfect(s)){
     if(!uniform)R=radii(s,kind,S);
     let size=s.w;if(R)for(const radius of R)size=Math.max(size,radius*2);
     const points=S.X.map((x,i)=>[x,S.Y[i],uniform?S.P[i]:R[i]/size]);
@@ -243,7 +249,7 @@ function draw(ctx,s,k,ox,oy){
   const tx=-(ox||0)*k,ty=-(oy||0)*k;
   const simple=a>=1&&f>=.995&&g.kind!=='lapis';
   const paint=(c)=>{
-    if(g.outline){c.fillStyle=s.c;c.fill(g.path)}
+    if(g.svgPath){c.fillStyle=s.c;c.fill(g.path)}
     else if(g.dashed){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;
       c.setLineDash(s.ls==='dot'?[.001,s.w*2.8]:[s.w*5,s.w*3.6]);c.stroke(g.path);c.setLineDash([])}
     else if(g.uniform){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;c.stroke(g.path)}
@@ -284,7 +290,7 @@ function invalidate(s){cache.delete(s)}
 function svg(s){
   const g=geom(s),K=KINDS[g.kind],f=flowOf(s)/100;
   const grain=g.kind==='lapis'?K.grain*(1.15-f*.55):K.grain*(1-f)*1.6;
-  if((!g.uniform&&!g.outline)||(!solidInk(s)&&grain>.02))return null;
+  if((!g.uniform&&!g.svgPath)||(!solidInk(s)&&grain>.02))return null;
   if(g.svgPath){const color=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24';return `<path d="${g.svgPath}" fill="${color}" opacity="${clamp(alphaOf(s)*(solidInk(s)?f:1),0,1)}"/>`}
   const S=g.S,n=S.X.length;if(!n)return '';
   const num=v=>Number(v.toFixed(4));

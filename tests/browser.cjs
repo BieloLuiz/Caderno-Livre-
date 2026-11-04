@@ -36,6 +36,20 @@ async function main(){
   await page.getByRole('button',{name:'Escrita ampliada',exact:true}).click();await page.waitForTimeout(200);assert(await page.locator('#writing-focus').isVisible());
   r=await page.locator('#focus-surface').boundingBox();await page.mouse.move(r.x+40,r.y+70);await page.mouse.down();await page.mouse.move(r.x+180,r.y+90,{steps:30});await page.mouse.up();await page.getByRole('button',{name:'Próxima linha ↵'}).click();await page.getByRole('button',{name:'Fechar escrita ampliada'}).click();
   await page.getByRole('button',{name:'Aumentar zoom'}).click();await page.getByRole('button',{name:'Aumentar zoom'}).click();assert(await page.locator('.ink-vector path').count()>0);
+  const navigation=await page.evaluate(()=>{
+   const surface=document.querySelector('.page .ink-vector'),scroll=document.querySelector('#scroller');
+   const r=surface.getBoundingClientRect(),x=r.left+150,y=Math.max(280,r.top+120);
+   const fire=(type,id,pointerType,px,py)=>surface.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType,clientX:px,clientY:py,pressure:.6,buttons:type==='pointerup'?0:1}));
+   const before=surface.querySelectorAll('path').length;
+   fire('pointerdown',901,'pen',x,y);fire('pointermove',901,'pen',x+40,y+30);fire('pointerup',901,'pen',x+40,y+30);
+   const wrote=surface.querySelectorAll('path').length>before;
+   const top=scroll.scrollTop;
+   fire('pointerdown',902,'touch',x,y);fire('pointermove',902,'touch',x,y-80);
+   const moved=scroll.scrollTop>top;
+   fire('pointerup',902,'touch',x,y-80);
+   fire('pointerdown',903,'pen',x,y);fire('pointermove',903,'pen',x+40,y+10);fire('pointerup',903,'pen',x+40,y+10);
+   return {wrote,moved};
+  });assert(navigation.wrote,'A caneta escreve');assert(navigation.moved,'O dedo move o papel imediatamente após levantar a caneta');
   await page.screenshot({path:'/tmp/caderno-vector-desktop.png'});
   await page.getByRole('button',{name:'Voltar para os cadernos'}).click();await page.waitForSelector('#library:not([hidden])');
   await page.locator('[data-opts]').first().click();await page.locator('#nb-folder').fill('Estudos');await page.locator('#nb-favorite').check();await page.getByRole('button',{name:'Salvar',exact:true}).click();

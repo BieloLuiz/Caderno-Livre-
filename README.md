@@ -43,3 +43,5 @@ Correção de continuidade: esferográfica e caneta fina usam a curva contínua 
 Estabilização restaurada para os parâmetros da versão continuous-3, validada no iPad pelo usuário.
 
 Pincel e tinteiro: interpolação dos pontos antes do contorno variável para reduzir bordas em bolinhas; fluxo controla opacidade sem perfurar tinta. Prévia vetorial evita rasterizar e codificar PNG a cada quadro, inclusive em traços antigos.
+
+Pincel e tinteiro usam uma união vetorial de discos e faixas tangentes para evitar cortes em contornos estreitos. Contato da caneta interrompe inércia; navegação por toque fica disponível ao levantar a ponta; captura perdida encerra o gesto.

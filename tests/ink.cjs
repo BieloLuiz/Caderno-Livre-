@@ -12,14 +12,14 @@ assert.equal(height(line('esfero',10)),height(line('esfero',90)),'A esferográfi
 assert(height(line('pincel',90))>height(line('pincel',10))*2,'O pincel responde à pressão registrada');
 for(const kind of ['esfero','fina','pincel','tinteiro','lapis']){
  const st=line(kind,60),before=JSON.stringify(st),g=Ink.geom(st);
- if(!g.uniform)assert(g.outline?.length>3,kind+' utiliza perfect-freehand');else assert(Ink.svg(st).includes('data-ink-engine="continuous"'));assert(g.box.every(Number.isFinite));assert(!/NaN|Infinity/.test(g.svgPath));
+ if(!g.uniform)assert(g.svgPath?.length>3,kind+' tem contorno preenchido');else assert(Ink.svg(st).includes('data-ink-engine="continuous"'));assert(g.box.every(Number.isFinite));assert(!/NaN|Infinity/.test(g.svgPath));
  assert.equal(JSON.stringify(st),before,'Calcular geometria não altera os dados salvos');
  const clone=JSON.parse(JSON.stringify(st));assert.equal(Ink.geom(clone).svgPath,g.svgPath,'O traço permanece igual depois de serializar e reabrir');
  const filled=[];const ctx={canvas:{width:1000,height:1414},save(){},restore(){},setTransform(){},fill(p){filled.push(p.d)}};
  if(kind!=='lapis'&&!g.uniform){Ink.draw(ctx,st,1);assert.deepEqual(filled,[g.svgPath],'O canvas usa o mesmo contorno do SVG');assert(Ink.svg(st).includes(g.svgPath))}
 }
 for(const p of [[100,100,50],[100,100,50,100,100,50],[100,100,50,120,120,80,100,100,20],[100,100,0,101,101,0]]){
- const g=Ink.geom({...line('pincel',50),p});assert(g.box.every(Number.isFinite));assert(g.outline.length>3);assert(!/NaN|Infinity/.test(g.svgPath));
+ const g=Ink.geom({...line('pincel',50),p});assert(g.box.every(Number.isFinite));assert(g.svgPath.length>3);assert(!/NaN|Infinity/.test(g.svgPath));
 }
 const tilt={...line('tinteiro',60),s:5,p:[100,100,60,30,45,140,120,70,40,90,180,110,50,50,135]};assert(Ink.geom(tilt).box.every(Number.isFinite));
 const legacy=line('esfero',60);delete legacy.engine;assert.equal(Ink.geom(legacy).outline,null,'Traços antigos continuam no motor anterior');assert(Ink.svg(legacy).includes('stroke-width="10"'));

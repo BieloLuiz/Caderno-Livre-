@@ -622,7 +622,6 @@ sc.addEventListener('pointerdown',e=>{
   if(S.loading||e.target.closest('.tedit'))return;
   if(e.pointerType==='touch'){
     if(act&&act.pen)return;
-    if(S.penDevice&&performance.now()-penUpAt<350)return;
     if((e.width||0)>48||(e.height||0)>48)return;
     stopInertia();
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -632,7 +631,8 @@ sc.addEventListener('pointerdown',e=>{
     if(S.finger&&S.active!=='text'){startStroke(e);return}
     pan={id:e.pointerId,x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t0:e.timeStamp,vx:0,vy:0,t:e.timeStamp,target:e.target};return;
   }
-  if(e.pointerType==='pen'){notePen(e);if(gest)endGesture();touches.clear();pan=null}
+  stopInertia();
+  if(e.pointerType==='pen'){if(act)cancelStroke();notePen(e);if(gest)endGesture();touches.clear();pan=null}
   if(e.pointerType==='mouse'&&e.button!==0)return;
   if(S.active==='text')return;
   startStroke(e);
@@ -668,6 +668,7 @@ function pushPt(x,y,ev){
   if(st.s===5){const [al,az]=tiltOf(ev);st.p.push(Math.round(al),Math.round(az))}
 }
 sc.addEventListener('pointermove',e=>{
+  if(e.pointerType==='pen'&&pan?.id===e.pointerId){pan=null;touches.delete(e.pointerId);stopInertia();notePen(e);startStroke(e)}
   if(e.pointerType==='touch'&&touches.has(e.pointerId)){
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(gest){moveGesture();return}
@@ -742,6 +743,7 @@ function endPointer(e){
   commitStroke(a);
 }
 sc.addEventListener('pointerup',endPointer);
+sc.addEventListener('lostpointercapture',e=>{if(act?.pid===e.pointerId)endPointer(e);if(pan?.id===e.pointerId)pan=null;touches.delete(e.pointerId);if(gest&&touches.size<2)endGesture()});
 sc.addEventListener('pointercancel',e=>{
   if(act&&e.pointerId===act.pid){if(act.pen)penUpAt=performance.now();cancelStroke()}
   if(e.pointerType==='touch'){touches.delete(e.pointerId);if(gest&&touches.size<2)endGesture();if(pan&&pan.id===e.pointerId)pan=null}
