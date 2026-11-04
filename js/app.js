@@ -382,7 +382,7 @@ const sc=$('#scroller');
 async function openNotebook(nb,fresh){
   if(!nb)return;
   if(S.nb&&!(await closeNotebook()))return;
-  S.loading=!fresh;S.nb=nb;S.undo=[];S.redo=[];S.pages=nb.pages.map(id=>({id,nb:nb.id,strokes:[],texts:[],tapes:[],dirty:true,el:null}));revealed.clear();
+  toolHintShown=false;S.loading=!fresh;S.nb=nb;S.undo=[];S.redo=[];S.pages=nb.pages.map(id=>({id,nb:nb.id,strokes:[],texts:[],tapes:[],dirty:true,el:null}));revealed.clear();
   $('#library').hidden=true;$('#editor').hidden=false;$('#title').value=nb.title;
   buildPages();buildTray();layout();setStatus();
   sc.scrollTop=0;
@@ -611,6 +611,12 @@ function eraserDialog(){
 /* Registro dos últimos toques do dedo na folha, para o Testar caneta mostrar
    o que o app decidiu (rolar, zoom ou ignorar) quando algo não funciona. */
 window.__touchLog=[];
+function toolName(){const p=S.pens.find(q=>q.id===S.active);if(p)return 'desenhando ('+KINDS[p.k].n.toLowerCase()+')';return ({eraser:'ferramenta borracha',text:'ferramenta texto',lasso:'ferramenta laço',tape:'ferramenta fita',laser:'caneta laser'})[S.active]||('ferramenta '+S.active)}
+/* Avisa (uma vez por abertura) quando a caneta está com uma ferramenta que
+   não escreve, como Texto ou Borracha: é o motivo mais comum de "a caneta não
+   desenha". */
+let toolHintShown=false;
+function toolHint(msg){if(toolHintShown)return;toolHintShown=true;toast(msg,5000)}
 function touchLog(what,e){const L=window.__touchLog;L.push(what+(e&&e.type==='pointerdown'?' ('+Math.round(Math.max(e.width||0,e.height||0))+'px)':''));if(L.length>12)L.shift()}
 document.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&S.nb&&!sc.contains(e.target)&&!e.target.closest('.tray,.topbar,.dialog,.menu,.textbar'))touchLog('fora da folha: '+(e.target.id||e.target.className||e.target.tagName),e)},true);
 const touches=new Map();let act=null,gest=null,pan=null,penUpAt=0,inertia=0;
@@ -657,7 +663,7 @@ sc.addEventListener('pointerdown',e=>{
   stopInertia();
   if(e.pointerType==='pen'){if(act)keepOrCancel();notePen(e);if(gest)endGesture();touches.clear();pan=null}
   if(e.pointerType==='mouse'&&e.button!==0)return;
-  if(S.active==='text'){touchLog('caneta: ferramenta texto',e);return}
+  if(S.active==='text'){touchLog('caneta: ferramenta texto',e);textDrag={id:e.pointerId,x:e.clientX,y:e.clientY};return}
   startStroke(e);
 });
 function startStroke(e){
@@ -665,7 +671,7 @@ function startStroke(e){
   const sh=selHit(e);if(sh){beginSelDrag(e,sh);return}
   if(S.sel){clearSel();e.preventDefault();return}
   const pageEl=e.target.closest('.page');if(!pageEl){touchLog('caneta fora da folha: '+(e.target.id||String(e.target.className&&e.target.className.baseVal!=null?e.target.className.baseVal:e.target.className)||e.target.tagName),e);return}
-  if(e.pointerType==='pen')touchLog('caneta: desenhando',e);
+  if(e.pointerType==='pen')touchLog('caneta: '+toolName(),e);
   e.preventDefault();if(editing)finishEdit();clearTimeout(hwrT);
   const pg=pageEl._pg;const [x,y]=toLocal(pg,e);
   try{sc.setPointerCapture(e.pointerId)}catch(_){}
@@ -697,7 +703,9 @@ function pushPt(x,y,ev){
   if(st.s>=3){let pr=a.pr;if(a.real){const raw=clamp(Number.isFinite(ev.pressure)?ev.pressure:.5,.05,1);a.prr=a.prr==null?raw:a.prr*.7+raw*.3;pr=a.prr}st.p.push(Math.round(pr*100))}
   if(st.s===5){const [al,az]=tiltOf(ev);st.p.push(Math.round(al),Math.round(az))}
 }
+let textDrag=null;
 sc.addEventListener('pointermove',e=>{
+  if(textDrag&&e.pointerId===textDrag.id&&Math.hypot(e.clientX-textDrag.x,e.clientY-textDrag.y)>14){textDrag=null;toolHint('A ferramenta Texto (T) está ativa. Para escrever à mão, toque numa caneta na barra.')}
   if(e.pointerType==='pen'&&pan?.id===e.pointerId){pan=null;touches.delete(e.pointerId);stopInertia();notePen(e);startStroke(e)}
   if(e.pointerType==='touch'&&touches.has(e.pointerId)){
     touches.set(e.pointerId,{...touches.get(e.pointerId),x:e.clientX,y:e.clientY});
@@ -718,7 +726,7 @@ sc.addEventListener('pointermove',e=>{
   const pxu=pageCssW/LW;
   for(const ev of (evs.length?evs:[e])){
     const [x,y]=toLocal(act.pg,ev);act.rx=x;act.ry=y;
-    if(act.eraser){eraseAt(x,y);continue}
+    if(act.eraser){act.dist=(act.dist||0)+(act.lx2!=null?Math.hypot(x-act.lx2,y-act.ly2):0);act.lx2=x;act.ly2=y;eraseAt(x,y);continue}
     /* pressão simulada pela velocidade real da mão (antes da estabilização) */
     const dt=Math.max(1,ev.timeStamp-act.lt),v=Math.hypot(x-act.px,y-act.py)*pxu/dt;
     if(v>0){act.pr=act.pr*.72+clamp(1.12-v*.42,.12,1)*.28;act.px=x;act.py=y;act.lt=ev.timeStamp}
@@ -768,6 +776,7 @@ function endPointer(e){
   liveClear();
   if(a.lasso){finishLasso(a);return}
   if(a.eraser){
+    if(!a.removed.length&&!a.tRem.length&&!a.tpRem.length&&a.pen&&a.dist>60)toolHint('A borracha está ativa. Para escrever, toque numa caneta na barra.');
     if(a.removed.length||a.created.size||a.tRem.length||a.tpRem.length)pushUndo({pg:a.pg.id,added:[...a.created],removed:a.removed.sort((x,y)=>x.i-y.i),tRem:a.tRem,tpRem:a.tpRem}),schedulePageSave(a.pg);
     renderPage(a.pg);return;
   }
