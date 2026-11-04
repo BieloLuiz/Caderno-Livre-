@@ -35,3 +35,5 @@ Os testes verificam edição, zoom, formas, janela ampliada, páginas, bibliotec
 
 Dependências incluídas: [perfect-freehand 1.2.3](https://github.com/steveruizok/perfect-freehand), de Steve Ruiz (MIT, licença em `vendor/LICENSE-perfect-freehand.txt`); PDF.js 3.11.174 (Apache-2.0, licença em `vendor/LICENSE-pdfjs.txt`); e jsPDF 2.5.1 (MIT, aviso preservado no arquivo). O leitor de PDF funciona com avaliação dinâmica desativada. O arquivo do perfect-freehand é o bundle CommonJS distribuído no npm, envolvido em uma função que publica `window.PerfectFreehand`, com o aviso MIT preservado; não há dependência de CDN.
 
+
+As canetas uniformes do motor perfect-freehand usam a linha central contínua com pontas arredondadas, evitando frestas no contorno de traços finos. Nessas canetas, fluxo baixo reduz a intensidade, sem perfurar a tinta. A correção também se aplica aos traços já salvos com perfect-freehand.

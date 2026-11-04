@@ -12,11 +12,11 @@ assert.equal(height(line('esfero',10)),height(line('esfero',90)),'A esferográfi
 assert(height(line('pincel',90))>height(line('pincel',10))*2,'O pincel responde à pressão registrada');
 for(const kind of ['esfero','fina','pincel','tinteiro','lapis']){
  const st=line(kind,60),before=JSON.stringify(st),g=Ink.geom(st);
- assert(g.outline?.length>3,kind+' utiliza perfect-freehand');assert(g.box.every(Number.isFinite));assert(!/NaN|Infinity/.test(g.svgPath));
+ if(!g.uniform)assert(g.outline?.length>3,kind+' utiliza perfect-freehand');else assert(Ink.svg(st).includes('data-ink-engine="perfect-freehand"'));assert(g.box.every(Number.isFinite));assert(!/NaN|Infinity/.test(g.svgPath));
  assert.equal(JSON.stringify(st),before,'Calcular geometria não altera os dados salvos');
  const clone=JSON.parse(JSON.stringify(st));assert.equal(Ink.geom(clone).svgPath,g.svgPath,'O traço permanece igual depois de serializar e reabrir');
  const filled=[];const ctx={canvas:{width:1000,height:1414},save(){},restore(){},setTransform(){},fill(p){filled.push(p.d)}};
- if(kind!=='lapis'){Ink.draw(ctx,st,1);assert.deepEqual(filled,[g.svgPath],'O canvas usa o mesmo contorno do SVG');assert(Ink.svg(st).includes(g.svgPath))}
+ if(kind!=='lapis'&&!g.uniform){Ink.draw(ctx,st,1);assert.deepEqual(filled,[g.svgPath],'O canvas usa o mesmo contorno do SVG');assert(Ink.svg(st).includes(g.svgPath))}
 }
 for(const p of [[100,100,50],[100,100,50,100,100,50],[100,100,50,120,120,80,100,100,20],[100,100,0,101,101,0]]){
  const g=Ink.geom({...line('pincel',50),p});assert(g.box.every(Number.isFinite));assert(g.outline.length>3);assert(!/NaN|Infinity/.test(g.svgPath));
@@ -28,3 +28,5 @@ const live={...line('pincel',60),_live:true};const previous=Ink.geom(live).svgPa
 const final={...line('pincel',60)},preview={...final,_live:true};assert.equal(Ink.geom(final).svgPath,Ink.geom(preview).svgPath,'Os mesmos pontos não mudam de aparência quando a caneta é levantada');
 const textured={...line('pincel',60),f:60};assert.equal(Ink.svg(textured),null,'Fluxo e texturas não são descartados');
 console.log('OK: perfect-freehand, pressão, espessura constante, pontos repetidos, inclinação, prévia, SVG/canvas, persistência e traços antigos.');
+
+assert(Ink.svg({...line('esfero',60),f:40}).includes('opacity="0.4"'),'Fluxo baixo na esferográfica reduz intensidade sem textura que interrompa a linha');
