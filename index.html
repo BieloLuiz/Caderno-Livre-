@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Caderno Livre</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -196,6 +196,7 @@ svg{display:block}
   background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
+<link rel="stylesheet" href="features.css">
 </head>
 <body>
 
@@ -205,8 +206,9 @@ svg{display:block}
       <h1>Caderno Livre</h1>
       <p>Escreva à mão com caneta, marca-texto e borracha. Funciona no computador, no celular e no tablet.</p>
     </div>
-    <div class="lib-tools"><span class="where" id="where" hidden><i></i><span></span></span><button class="btn" id="backup-lib">Backup</button><button class="btn" id="pentest-lib">Testar caneta</button></div>
+    <div class="lib-tools"><span class="where" id="where" hidden><i></i><span></span></span><button class="btn" id="import-pdf">Importar PDF</button><button class="btn" id="backup-lib">Backup</button><button class="btn" id="pentest-lib">Testar caneta</button></div>
   </header>
+  <div class="library-filters" role="search"><label><span>Buscar</span><input id="library-search" type="search" placeholder="Cadernos e textos digitados…"></label><label><span>Pasta</span><select id="library-folder"><option value="">Todas as pastas</option></select></label><button class="btn" id="library-favorites" aria-pressed="false">★ Favoritos</button></div>
   <div id="shelf" class="shelf"><div class="lib-state">Abrindo seus cadernos…</div></div>
 </section>
 
@@ -231,6 +233,11 @@ svg{display:block}
   </div>
 </section>
 
+<section id="writing-focus" hidden aria-label="Janela de escrita ampliada">
+  <div class="focus-controls"><b>Escrita ampliada</b><span id="focus-position"></span><label>Ampliação <select id="focus-scale"><option value="2">2×</option><option value="2.8" selected>2,8×</option><option value="4">4×</option></select></label><button class="icon-btn" id="focus-close" aria-label="Fechar escrita ampliada">✕</button></div>
+  <div id="focus-surface"><canvas id="focus-paper"></canvas><svg id="focus-ink" preserveAspectRatio="none" aria-hidden="true"></svg><canvas id="focus-text" aria-hidden="true"></canvas><svg id="focus-tapes" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+  <div class="focus-controls"><small>Toque na página para escolher onde escrever.</small><button class="btn" data-focus-move="left" aria-label="Região anterior">←</button><button class="btn" data-focus-move="right" aria-label="Próxima região">→</button><button class="btn" data-focus-move="up" aria-label="Subir região">↑</button><button class="btn" data-focus-move="down" aria-label="Descer região">↓</button><button class="btn" data-focus-move="next">Próxima linha ↵</button></div>
+</section>
 <div id="toast" hidden role="status"></div>
 
 <script src="js/ink.js"></script>
@@ -240,3 +247,4 @@ svg{display:block}
 <script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
 </body>
 </html>
+

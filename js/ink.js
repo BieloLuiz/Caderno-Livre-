@@ -64,6 +64,7 @@ class Stabilizer{
 function samplesOf(s){
   const st=s.s||2,p=s.p,n=p.length/st;
   const X=[],Y=[],P=[],A=[],Z=[];
+  if(s.shape==='line'||s.shape==='rectangle'){for(let i=0;i<n;i++){X.push(p[i*st]);Y.push(p[i*st+1]);P.push(.5);A.push(90);Z.push(45)}return {X,Y,P,A,Z}}
   const get=(i,j)=>p[clamp(i,0,n-1)*st+j];
   const pr=i=>st>=3?get(i,2)/100:.5, al=i=>st>=5?get(i,3):90, az=i=>st>=5?get(i,4):45;
   if(n===1){X.push(p[0]);Y.push(p[1]);P.push(pr(0));A.push(al(0));Z.push(az(0));return {X,Y,P,A,Z}}
@@ -172,7 +173,16 @@ function stampPath(S,R){
   }
   return path;
 }
-function linePath(S){const path=new Path2D();path.moveTo(S.X[0],S.Y[0]);for(let i=1;i<S.X.length;i++)path.lineTo(S.X[i],S.Y[i]);if(S.X.length===1)path.lineTo(S.X[0]+.01,S.Y[0]);return path}
+/* Uma curva contínua evita as pequenas ondulações da união de carimbos na
+   esferográfica. A mesma curva é usada na prévia e no traço salvo. */
+function linePath(S,sharp=false){
+  const path=new Path2D(),n=S.X.length;if(!n)return path;
+  path.moveTo(S.X[0],S.Y[0]);
+  if(sharp){for(let i=1;i<n;i++)path.lineTo(S.X[i],S.Y[i]);return path}
+  for(let i=1;i<n-1;i++)path.quadraticCurveTo(S.X[i],S.Y[i],(S.X[i]+S.X[i+1])/2,(S.Y[i]+S.Y[i+1])/2);
+  if(n>1)path.lineTo(S.X[n-1],S.Y[n-1]);else path.lineTo(S.X[0]+.01,S.Y[0]);
+  return path;
+}
 
 /* Cache: a geometria de cada traço é calculada uma vez e reaproveitada em
    qualquer zoom (o desenho é vetorial; o zoom só muda a escala). */
@@ -183,9 +193,10 @@ function geom(s){
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let i=0;i<S.X.length;i++){const x=S.X[i],y=S.Y[i];if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
   let path,R=null,pad=s.w/2+1;
   const dashed=s.ls==='dot'||s.ls==='dash';
-  if(K.shape==='line'||dashed)path=linePath(S);
+  const uniform=kind==='esfero'||K.shape==='line';
+  if(uniform||dashed)path=linePath(S,s.shape==='line'||s.shape==='rectangle');
   else{R=radii(s,kind,S);path=stampPath(S,R);let m=0;for(const r of R)if(r>m)m=r;pad=m+1}
-  g={kind,S,R,path,dashed,box:[x0-pad,y0-pad,x1+pad,y1+pad]};
+  g={kind,S,R,path,dashed,uniform,box:[x0-pad,y0-pad,x1+pad,y1+pad]};
   if(Object.isFrozen(s)||!s._live)cache.set(s,g);
   return g;
 }
@@ -211,7 +222,7 @@ function draw(ctx,s,k,ox,oy){
   const paint=(c)=>{
     if(g.dashed){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;
       c.setLineDash(s.ls==='dot'?[.001,s.w*2.8]:[s.w*5,s.w*3.6]);c.stroke(g.path);c.setLineDash([])}
-    else if(K.shape==='line'){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;c.stroke(g.path)}
+    else if(g.uniform){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;c.stroke(g.path)}
     else{c.fillStyle=s.c;c.fill(g.path)}
   };
   if(simple){ctx.save();ctx.setTransform(k,0,0,k,tx,ty);paint(ctx);ctx.restore();return}
@@ -244,6 +255,21 @@ function draw(ctx,s,k,ox,oy){
   ctx.drawImage(L,0,0,bw,bh,bx,by,bw,bh);ctx.restore();
 }
 function invalidate(s){cache.delete(s)}
+/* Tinta uniforme permanece vetorial na tela, inclusive quando o canvas de
+   fundo já atingiu o limite de memória. Texturas continuam no motor raster. */
+function svg(s){
+  const g=geom(s),K=KINDS[g.kind],f=flowOf(s)/100;
+  if(!g.uniform||K.grain*(1-f)*1.6>.02)return null;
+  const S=g.S,n=S.X.length;if(!n)return '';
+  const num=v=>Number(v.toFixed(4));
+  let d=`M${num(S.X[0])} ${num(S.Y[0])}`;
+  if(s.shape==='line'||s.shape==='rectangle'){for(let i=1;i<n;i++)d+=` L${num(S.X[i])} ${num(S.Y[i])}`}
+  else for(let i=1;i<n-1;i++)d+=` Q${num(S.X[i])} ${num(S.Y[i])} ${num((S.X[i]+S.X[i+1])/2)} ${num((S.Y[i]+S.Y[i+1])/2)}`;
+  d+=n>1?` L${num(S.X[n-1])} ${num(S.Y[n-1])}`:` l.01 0`;
+  const c=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24',w=clamp(Number(s.w)||1,.1,100);
+  const dash=g.dashed?` stroke-dasharray="${s.ls==='dot'?`.001 ${w*2.8}`:`${w*5} ${w*3.6}`}"`:'';
+  return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" opacity="${clamp(alphaOf(s),0,1)}" stroke-linecap="round" stroke-linejoin="round"${dash}${g.kind==='hl'?' style="mix-blend-mode:multiply"':''}/>`;
+}
 
 /* ---------- Fita (washi) ----------
    Faixa larga com ponta reta, em três padrões. Fica por cima de tudo na página
@@ -275,5 +301,6 @@ function drawTape(ctx,t,k,revealed){
   ctx.restore();
 }
 
-window.Ink={KINDS,ORDER,kindOf,alphaOf,flowOf,Stabilizer,draw,geom,invalidate,simplify,drawTape,TAPE_ALPHA};
+window.Ink={KINDS,ORDER,kindOf,alphaOf,flowOf,Stabilizer,draw,svg,geom,invalidate,simplify,drawTape,TAPE_ALPHA};
 })();
+

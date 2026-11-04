@@ -1,0 +1,44 @@
+/* Execute: node tests/browser.cjs (Playwright e Chromium disponíveis). */
+const {chromium}=require('playwright');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+async function main(){
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||(fs.existsSync('/usr/bin/chromium')?'/usr/bin/chromium':chromium.executablePath()),headless:true,args:['--no-sandbox']});
+ try{
+  const context=await browser.newContext({viewport:{width:1024,height:900},deviceScaleFactor:2,serviceWorkers:'block'});
+  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.stack));
+  await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname!=='caderno.test')return route.abort();const file=path.join(root,decodeURIComponent(u.pathname==='/'?'/index.html':u.pathname));if(!file.startsWith(root)||!fs.existsSync(file))return route.fulfill({status:404,body:''});return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.png')?'image/png':'text/html'});});
+  await page.goto('http://caderno.test/');await page.locator('[data-open]').first().click();await page.waitForTimeout(500);
+  assert(await page.locator('.ink-vector path').count()>0,'Tinta vetorial no exemplo');
+  const target=page.locator('.page').first();let r=await target.boundingBox();
+  await page.mouse.move(r.x+220,r.y+150);await page.mouse.down();await page.mouse.move(r.x+390,r.y+260,{steps:35});await page.mouse.up();
+  const count=await page.locator('.page .ink-vector path').count();assert(count>0);
+  await page.getByRole('button',{name:'Páginas',exact:true}).click();await page.getByRole('button',{name:'Duplicar página 1',exact:true}).click();assert.equal(await page.locator('.page-card').count(),3);
+  await page.getByRole('button',{name:'Mover página 1 para baixo',exact:true}).click();await page.getByRole('button',{name:'Fechar',exact:true}).click();assert.equal(await page.locator('.page').count(),3);
+  await page.getByRole('button',{name:'Escrita ampliada',exact:true}).click();await page.waitForTimeout(200);assert(await page.locator('#writing-focus').isVisible());
+  r=await page.locator('#focus-surface').boundingBox();await page.mouse.move(r.x+40,r.y+70);await page.mouse.down();await page.mouse.move(r.x+180,r.y+90,{steps:30});await page.mouse.up();await page.getByRole('button',{name:'Próxima linha ↵'}).click();await page.getByRole('button',{name:'Fechar escrita ampliada'}).click();
+  await page.getByRole('button',{name:'Aumentar zoom'}).click();await page.getByRole('button',{name:'Aumentar zoom'}).click();assert(await page.locator('.ink-vector path').count()>0);
+  await page.screenshot({path:'/tmp/caderno-vector-desktop.png'});
+  await page.getByRole('button',{name:'Voltar para os cadernos'}).click();await page.waitForSelector('#library:not([hidden])');
+  await page.locator('[data-opts]').first().click();await page.locator('#nb-folder').fill('Estudos');await page.locator('#nb-favorite').check();await page.getByRole('button',{name:'Salvar',exact:true}).click();
+  await page.locator('#library-folder').selectOption('Estudos');await page.locator('#library-favorites').click();assert.equal(await page.locator('[data-open]').count(),1);await page.locator('#library-search').fill('inexistente');await page.waitForTimeout(200);assert.equal(await page.locator('[data-open]').count(),0);await page.locator('#library-search').fill('');
+  await page.reload();await page.waitForSelector('[data-open]');await page.locator('[data-open]').first().click();await page.waitForTimeout(400);assert.equal(await page.locator('.page').count(),3);assert(await page.locator('.page .ink-vector path').count()>=count);
+  // Formas: manter a ponta parada por 650 ms ajusta uma linha.
+  await page.locator('.page').first().scrollIntoViewIfNeeded();r=await page.locator('.page').first().boundingBox();await page.mouse.move(r.x+130,r.y+100);await page.mouse.down();await page.mouse.move(r.x+330,r.y+103,{steps:35});await page.waitForTimeout(850);await page.mouse.up();await page.waitForTimeout(100);
+  assert.match(await page.locator('#toast').innerText(),/ajustada/);
+  await page.getByRole('button',{name:'Voltar para os cadernos'}).click();await page.waitForSelector('#library:not([hidden])');
+  // Um PDF mínimo real, construído sem dependências de geração.
+  const stream='BT /F1 24 Tf 50 700 Td (Documento de teste) Tj ET';const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`];let pdf='%PDF-1.4\n';const offsets=[0];for(let i=0;i<objects.length;i++){offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`}const xref=pdf.length;pdf+=`xref\n0 6\n0000000000 65535 f \n`+offsets.slice(1).map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  const chooser=page.waitForEvent('filechooser');await page.getByRole('button',{name:'Importar PDF',exact:true}).click();await (await chooser).setFiles({name:'Documento.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf)});
+  await page.waitForSelector('#editor:not([hidden])',{timeout:20000});await page.waitForFunction(()=>document.querySelector('#toast')?.textContent.includes('importada'));
+  assert.equal(await page.locator('.page').count(),1);await page.waitForTimeout(200);
+  const backgroundPixel=await page.locator('.page canvas').first().evaluate(c=>Array.from(c.getContext('2d').getImageData(100,100,1,1).data));assert.equal(backgroundPixel[3],255);
+  await page.getByRole('button',{name:'Voltar para os cadernos'}).click();await page.waitForSelector('#library:not([hidden])');await page.reload();await page.waitForSelector('[data-open]');assert.equal(await page.locator('[data-open]').count(),2);
+  await context.close();
+  // Layout pequeno e caneta simulada por PointerEvent.
+  const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true,serviceWorkers:'block'});const small=await mobile.newPage();small.on('pageerror',e=>errors.push(e.stack));await mobile.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname!=='caderno.test')return route.abort();const f=path.join(root,u.pathname==='/'?'index.html':u.pathname);return fs.existsSync(f)?route.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':'text/html'}):route.fulfill({status:404,body:''})});await small.goto('http://caderno.test/');await small.locator('[data-open]').first().tap();await small.waitForTimeout(300);await small.screenshot({path:'/tmp/caderno-vector-mobile.png'});assert.equal(await small.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await mobile.close();
+  assert.deepEqual(errors,[]);console.log('OK: escrita vetorial, zoom, páginas, duplicação, reordenação, janela ampliada, formas, pastas, favoritos, busca, PDF, persistência e layout móvel.');
+ }finally{await browser.close()}
+}
+main().catch(e=>{console.error(e);process.exit(1)});
