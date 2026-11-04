@@ -40,3 +40,17 @@ for(const k of ['esfero','fina'])for(const f of [40,100]){
  scope.PerfectFreehand=library;
  assert(Ink.svg(old).includes(`opacity="${f/100}"`));
 }
+
+// Stabilization suppresses sensor jitter but follows small writing and fast motion.
+for(const scale of [.5,1,2]){
+ const filter=new Ink.Stabilizer(55,scale);filter.push(0,0);
+ for(let i=0;i<20;i++)assert.equal(filter.push((i%2?.3:-.3)*scale,0),null,'Tremor fino não move a ponta');
+ let tip;for(let x=1;x<=60;x++)tip=filter.push(x*scale,0)||tip;
+ assert(60-tip[0]/scale<2,'Atraso em movimento lento fica abaixo de 2 px');
+ tip=filter.push(90*scale,0);assert(90-tip[0]/scale<1.3,'A ponta acompanha movimento rápido');
+ const end=filter.finish(91*scale,scale).at(-1);assert.equal(end[0],91*scale);assert.equal(end[1],scale);
+ const loop=new Ink.Stabilizer(55,scale);loop.push(3*scale,0);let samples=0;
+ for(let i=1;i<=48;i++){const a=i*Math.PI/24;if(loop.push(3*Math.cos(a)*scale,3*Math.sin(a)*scale))samples++}
+ assert(samples>24,'Uma volta de 6 px permanece capturada');
+}
+const raw=new Ink.Stabilizer(0,1);raw.push(0,0);assert.deepEqual(Array.from(raw.push(1,2)),[1,2],'Estabilidade zero acompanha a entrada');
