@@ -1362,8 +1362,16 @@ let dlP=null;
    download normal do navegador (no iPad abre a opção de salvar em Arquivos). */
 async function saveFile(name,blob){
   if(window.claude&&window.claude.use){if(!dlP)dlP=window.claude.use('downloads');const dl=await dlP;if(dl){await dl.save({filename:name,data:blob});return}}
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  /* O nome do arquivo vai no próprio arquivo (File) e no link; o link só sai
+     da página depois que o navegador começou o download, senão alguns
+     navegadores perdem o nome e salvam como "download". */
+  /* Alguns navegadores descartam nomes com acento e salvam como "download",
+     sem extensão. No nome do arquivo (só nele) os acentos viram letras simples. */
+  name=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e]/g,'_');
+  const file=new File([blob],name,{type:blob.type||'application/octet-stream'});
+  const url=URL.createObjectURL(file);const a=document.createElement('a');a.href=url;a.download=name;a.rel='noopener';a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},60000);
 }
 
 /* ---------- Backup ----------
