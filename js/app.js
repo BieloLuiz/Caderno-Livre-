@@ -1413,6 +1413,29 @@ async function saveFile(name,blob){
   setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},60000);
 }
 
+/* ---------- Fundos de PDF dentro do Claude ----------
+   Na versão do Claude cada página da conta tem limite de tamanho, então a
+   imagem de uma página de PDF vai para o espaço de arquivos do próprio app e a
+   página guarda só o endereço dela. No GitHub (IndexedDB) nada muda. */
+let assetsP=null;
+async function getAssets(){if(!HAS_CLAUDE)return null;if(!assetsP)assetsP=window.claude.use('assets');try{return await assetsP}catch(e){return null}}
+function dataUrlToBlob(src){const m=/^data:([^;,]+);base64,(.*)$/.exec(src);if(!m)return null;const bin=atob(m[2]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:m[1]})}
+async function storeBackground(bg){
+  if(Store.mode!=='db'||!bg||!/^data:image\//.test(bg.src))return bg;
+  const assets=await getAssets();if(!assets)return bg;
+  const blob=dataUrlToBlob(bg.src);if(!blob)return bg;
+  const r=await assets.upload(blob,{type:blob.type});
+  return {...bg,src:'/_blob/'+r.id,asset:r.id};
+}
+/* Para o backup: a imagem volta a ser um arquivo comum (data URL), para o
+   backup abrir em qualquer versão do app. */
+async function inlineBackground(bg){
+  if(!bg||!bg.src||/^data:/.test(bg.src))return bg;
+  const blob=await (await fetch(bg.src)).blob();
+  const src=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>rej(fr.error);fr.readAsDataURL(blob)});
+  const out={...bg,src};delete out.asset;return out;
+}
+
 /* ---------- Backup ----------
    Um arquivo .json com todos os cadernos, páginas e ajustes. Restaurar só
    acrescenta: nunca apaga nem substitui um caderno seu; se já existir um com o
@@ -1421,7 +1444,7 @@ async function exportBackup(){
   toast('Juntando seus cadernos…',8000);
   try{await drainSaves();
     const nbs=await Store.listNotebooks();const pages={};
-    for(const nb of nbs)for(const id of nb.pages){const p=await Store.getPage(id);if(p)pages[id]=p}
+    for(const nb of nbs)for(const id of nb.pages){const p=await Store.getPage(id);if(p)pages[id]=p.background?{...p,background:await inlineBackground(p.background)}:p}
     const data={app:'caderno-livre',v:1,data:new Date().toISOString(),meta:metaBody(),notebooks:nbs,pages};
     const d=new Date(),stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     await saveFile('caderno-livre-backup-'+stamp+'.json',new Blob([JSON.stringify(data)],{type:'application/json'}));
@@ -1461,7 +1484,7 @@ function importBackup(){
       }
       if(Store.mode==='idb'){
         await new Promise((resolve,reject)=>{const tx=IDB.db.transaction(['nbs','pgs'],'readwrite');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);for(const {target,pages} of staged){for(const [id,body] of pages)tx.objectStore('pgs').put(body,id);tx.objectStore('nbs').put(target,target.id)}});
-      }else for(const {target,pages} of staged){for(const [id,body] of pages)await Store.writePage(id,body);await Store.writeNotebook(target)}
+      }else for(const {target,pages} of staged){for(const [id,body] of pages)await Store.writePage(id,body.background?{...body,background:await storeBackground(body.background)}:body);await Store.writeNotebook(target)}
       NBS=await Store.listNotebooks();renderLibrary();toast(added||copies?`Backup restaurado: ${added} caderno(s) novo(s)${copies?`, ${copies} como cópia`:''}.`:'Todos os cadernos desse backup já estavam aqui.',5000);
     }catch(e){toast('Não consegui restaurar o backup. Confira o espaço disponível e tente novamente.',5000)}
   };inp.click();
@@ -1623,7 +1646,7 @@ async function importPdfFile(file){
       const src=cv.toDataURL('image/jpeg',.9);total+=src.length;cv.width=cv.height=1;page.cleanup();
       if(total>50*1024*1024)throw new Error('pdf_size');
       const fit=Math.min(LW/v.width,LH/v.height),w=v.width*fit,h=v.height*fit;
-      const pg={id:uid(),nb:null,strokes:[],texts:[],tapes:[],background:{src,x:(LW-w)/2,y:(LH-h)/2,w,h},dirty:true,el:null};
+      const pg={id:uid(),nb:null,strokes:[],texts:[],tapes:[],background:await storeBackground({src,x:(LW-w)/2,y:(LH-h)/2,w,h}),dirty:true,el:null};
       if(Store.mode==='db'&&JSON.stringify(pageBody(pg)).length>MAX_DOC)throw new Error('pdf_remote_size');staged.push(pg);
     }
     if(cancelled||S.nb!==notebook)throw new Error('cancelled');
