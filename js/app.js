@@ -412,7 +412,7 @@ let pageCssW=600;
    de resolução para o antisserrilhamento das bordas ficar mais suave. */
 function renderScale(){
   const vv=window.visualViewport,z=vv&&vv.scale>1?vv.scale:1;
-  return clamp(Math.max(2,window.devicePixelRatio||1)*z*1.25,2,4.5);
+  return clamp(Math.max(2,window.devicePixelRatio||1)*z,2,4.5);
 }
 function pxFor(css){
   const dpr=renderScale();let w=Math.round(css*dpr);
