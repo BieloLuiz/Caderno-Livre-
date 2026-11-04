@@ -12,7 +12,7 @@ assert.equal(height(line('esfero',10)),height(line('esfero',90)),'A esferográfi
 assert(height(line('pincel',90))>height(line('pincel',10))*2,'O pincel responde à pressão registrada');
 for(const kind of ['esfero','fina','pincel','tinteiro','lapis']){
  const st=line(kind,60),before=JSON.stringify(st),g=Ink.geom(st);
- if(!g.uniform)assert(g.outline?.length>3,kind+' utiliza perfect-freehand');else assert(Ink.svg(st).includes('data-ink-engine="perfect-freehand"'));assert(g.box.every(Number.isFinite));assert(!/NaN|Infinity/.test(g.svgPath));
+ if(!g.uniform)assert(g.outline?.length>3,kind+' utiliza perfect-freehand');else assert(Ink.svg(st).includes('data-ink-engine="continuous"'));assert(g.box.every(Number.isFinite));assert(!/NaN|Infinity/.test(g.svgPath));
  assert.equal(JSON.stringify(st),before,'Calcular geometria não altera os dados salvos');
  const clone=JSON.parse(JSON.stringify(st));assert.equal(Ink.geom(clone).svgPath,g.svgPath,'O traço permanece igual depois de serializar e reabrir');
  const filled=[];const ctx={canvas:{width:1000,height:1414},save(){},restore(){},setTransform(){},fill(p){filled.push(p.d)}};
@@ -30,3 +30,13 @@ const textured={...line('pincel',60),f:60};assert.equal(Ink.svg(textured),null,'
 console.log('OK: perfect-freehand, pressão, espessura constante, pontos repetidos, inclinação, prévia, SVG/canvas, persistência e traços antigos.');
 
 assert(Ink.svg({...line('esfero',60),f:40}).includes('opacity="0.4"'),'Fluxo baixo na esferográfica reduz intensidade sem textura que interrompa a linha');
+
+// Saved PF and legacy uniform pens share exactly the same continuous geometry.
+for(const k of ['esfero','fina'])for(const f of [40,100]){
+ const st={...line(k,60),f},old={...st};delete old.engine;
+ assert.equal(Ink.svg(st),Ink.svg(old),'A marca do motor não muda a caneta contínua');
+ const library=scope.PerfectFreehand;scope.PerfectFreehand=null;
+ assert.equal(Ink.svg({...st}),Ink.svg(old),'Canetas uniformes independem da biblioteca');
+ scope.PerfectFreehand=library;
+ assert(Ink.svg(old).includes(`opacity="${f/100}"`));
+}

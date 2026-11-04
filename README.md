@@ -37,3 +37,5 @@ Dependências incluídas: [perfect-freehand 1.2.3](https://github.com/steveruizo
 
 
 As canetas uniformes do motor perfect-freehand usam a linha central contínua com pontas arredondadas, evitando frestas no contorno de traços finos. Nessas canetas, fluxo baixo reduz a intensidade, sem perfurar a tinta. A correção também se aplica aos traços já salvos com perfect-freehand.
+
+Correção de continuidade: esferográfica e caneta fina usam a curva contínua anterior, independentemente da marca do motor nos dados salvos. Fluxo muda a opacidade nessas canetas, sem apagar textura. Perfect Freehand permanece nas ferramentas de largura variável. O arquivo do motor tem URL versionada para atualizar o cache do navegador.

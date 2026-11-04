@@ -22,7 +22,8 @@ const kindOf=s=>s.k&&KINDS[s.k]?s.k:(s.t==='hl'?'hl':'esfero');
 const alphaOf=s=>s.o!=null?s.o:KINDS[kindOf(s)].o;
 const flowOf=s=>s.f!=null?s.f:100;   // traços antigos: tinta cheia
 const ENGINE='perfect-freehand-1.2.3';
-const usesPerfect=s=>s.engine===ENGINE&&!s.shape&&kindOf(s)!=='hl'&&!['dot','dash'].includes(s.ls)&&!!window.PerfectFreehand;
+const isContinuous=s=>['esfero','fina'].includes(kindOf(s));
+const usesPerfect=s=>!isContinuous(s)&&s.engine===ENGINE&&!s.shape&&kindOf(s)!=='hl'&&!['dot','dash'].includes(s.ls)&&!!window.PerfectFreehand;
 
 /* ---------- Estabilizador ----------
    Duas etapas com efeitos diferentes:
@@ -205,14 +206,7 @@ function geom(s){
   const dashed=s.ls==='dot'||s.ls==='dash';
   const uniform=kind==='esfero'||K.shape==='line';
   let outline=null,svgPath=null;
-  if(usesPerfect(s)&&uniform){
-    // Canetas finas usam uma linha contínua: um polígono estreito pode criar
-    // pequenas frestas ao cruzar os próprios lados na rasterização do WebKit.
-    const points=window.PerfectFreehand.getStrokePoints(S.X.map((x,i)=>[x,S.Y[i],S.P[i]]),{size:s.w,streamline:0,last:true});
-    S.X=points.map(p=>p.point[0]);S.Y=points.map(p=>p.point[1]);
-    path=linePath(S);
-  }
-  else if(usesPerfect(s)){
+  if(usesPerfect(s)){
     if(!uniform)R=radii(s,kind,S);
     let size=s.w;if(R)for(const radius of R)size=Math.max(size,radius*2);
     const points=S.X.map((x,i)=>[x,S.Y[i],uniform?S.P[i]:R[i]/size]);
@@ -243,7 +237,7 @@ function layer(w,h){if(!scratch)scratch=document.createElement('canvas');if(scra
 /* ---------- Desenho de um traço ----------
    ctx deve estar sem transformação; k = pixels por unidade da página. */
 function draw(ctx,s,k,ox,oy){
-  const g=geom(s),K=KINDS[g.kind],continuous=usesPerfect(s)&&g.uniform,a=alphaOf(s)*(continuous?flowOf(s)/100:1),f=continuous?1:flowOf(s)/100;
+  const g=geom(s),K=KINDS[g.kind],continuous=isContinuous(s),a=alphaOf(s)*(continuous?flowOf(s)/100:1),f=continuous?1:flowOf(s)/100;
   const tx=-(ox||0)*k,ty=-(oy||0)*k;
   const simple=a>=1&&f>=.995&&g.kind!=='lapis';
   const paint=(c)=>{
@@ -288,8 +282,8 @@ function invalidate(s){cache.delete(s)}
 function svg(s){
   const g=geom(s),K=KINDS[g.kind],f=flowOf(s)/100;
   const grain=g.kind==='lapis'?K.grain*(1.15-f*.55):K.grain*(1-f)*1.6;
-  if((!g.uniform&&!g.outline)||(!(usesPerfect(s)&&g.uniform)&&grain>.02))return null;
-  if(g.svgPath){const color=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24';return `<path d="${g.svgPath}" fill="${color}" opacity="${clamp(alphaOf(s)*(usesPerfect(s)&&g.uniform?f:1),0,1)}"/>`}
+  if((!g.uniform&&!g.outline)||(!isContinuous(s)&&grain>.02))return null;
+  if(g.svgPath){const color=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24';return `<path d="${g.svgPath}" fill="${color}" opacity="${clamp(alphaOf(s)*(isContinuous(s)?f:1),0,1)}"/>`}
   const S=g.S,n=S.X.length;if(!n)return '';
   const num=v=>Number(v.toFixed(4));
   let d=`M${num(S.X[0])} ${num(S.Y[0])}`;
@@ -298,7 +292,7 @@ function svg(s){
   d+=n>1?` L${num(S.X[n-1])} ${num(S.Y[n-1])}`:` l.01 0`;
   const c=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24',w=clamp(Number(s.w)||1,.1,100);
   const dash=g.dashed?` stroke-dasharray="${s.ls==='dot'?`.001 ${w*2.8}`:`${w*5} ${w*3.6}`}"`:'';
-  return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" opacity="${clamp(alphaOf(s)*(usesPerfect(s)&&g.uniform?f:1),0,1)}" stroke-linecap="round" stroke-linejoin="round"${usesPerfect(s)?' data-ink-engine="perfect-freehand"':''}${dash}${g.kind==='hl'?' style="mix-blend-mode:multiply"':''}/>`;
+  return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" opacity="${clamp(alphaOf(s)*(isContinuous(s)?f:1),0,1)}" stroke-linecap="round" stroke-linejoin="round"${isContinuous(s)?' data-ink-engine="continuous"':''}${dash}${g.kind==='hl'?' style="mix-blend-mode:multiply"':''}/>`;
 }
 
 /* ---------- Fita (washi) ----------

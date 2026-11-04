@@ -11,10 +11,26 @@ async function main(){
   await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname!=='caderno.test')return route.abort();const file=path.join(root,decodeURIComponent(u.pathname==='/'?'/index.html':u.pathname));if(!file.startsWith(root)||!fs.existsSync(file))return route.fulfill({status:404,body:''});return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.png')?'image/png':'text/html'});});
   await page.goto('http://caderno.test/');await page.locator('[data-open]').first().click();await page.waitForTimeout(500);
   assert(await page.locator('.ink-vector path').count()>0,'Tinta vetorial no exemplo');
+  // Thin curved strokes must cover every column at 200% zoom, in SVG and export.
+  const gaps=await page.evaluate(async()=>{
+   const failures=[];
+   for(const k of ['esfero','fina'])for(const engine of [undefined,Ink.ENGINE])for(const f of [40,100]){
+    const p=[];for(let x=20;x<=220;x+=2)p.push(x,60+25*Math.sin(x/40),60);
+    const st={k,engine,f,p,s:3,w:.8,o:1,c:'#000000'},scale=4;
+    for(const mode of ['canvas','svg']){
+     const cv=document.createElement('canvas');cv.width=960;cv.height=400;const ctx=cv.getContext('2d');
+     if(mode==='canvas')Ink.draw(ctx,st,scale);
+     else{const img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="400" viewBox="0 0 240 100">${Ink.svg(st)}</svg>`);await img.decode();ctx.drawImage(img,0,0)}
+     const data=ctx.getImageData(0,0,960,400).data;
+     for(let x=84;x<876;x++){let peak=0;for(let y=100;y<360;y++)peak=Math.max(peak,data[(y*960+x)*4+3]);if(peak<255*f/100*.6){failures.push({k,engine,f,mode,x,peak});break}}
+    }
+   }
+   return failures;
+  });assert.deepEqual(gaps,[],'Curvas finas contínuas em SVG e canvas, novas e salvas, com fluxo baixo e cheio');
   const target=page.locator('.page').first();let r=await target.boundingBox();
   await page.mouse.move(r.x+220,r.y+150);await page.mouse.down();await page.mouse.move(r.x+390,r.y+260,{steps:35});await page.mouse.up();
   const count=await page.locator('.page .ink-vector path').count();assert(count>0);
-  assert(await page.locator('.page .ink-vector path[data-ink-engine="perfect-freehand"]').count()>0,'O novo traço usa o traço contínuo de perfect-freehand');
+  assert(await page.locator('.page .ink-vector path[data-ink-engine="continuous"]').count()>0,'A caneta usa o traço contínuo independente de perfect-freehand');
   await page.getByRole('button',{name:'Páginas',exact:true}).click();await page.getByRole('button',{name:'Duplicar página 1',exact:true}).click();assert.equal(await page.locator('.page-card').count(),3);
   await page.getByRole('button',{name:'Mover página 1 para baixo',exact:true}).click();await page.getByRole('button',{name:'Fechar',exact:true}).click();assert.equal(await page.locator('.page').count(),3);
   await page.getByRole('button',{name:'Escrita ampliada',exact:true}).click();await page.waitForTimeout(200);assert(await page.locator('#writing-focus').isVisible());
@@ -25,7 +41,7 @@ async function main(){
   await page.locator('[data-opts]').first().click();await page.locator('#nb-folder').fill('Estudos');await page.locator('#nb-favorite').check();await page.getByRole('button',{name:'Salvar',exact:true}).click();
   await page.locator('#library-folder').selectOption('Estudos');await page.locator('#library-favorites').click();assert.equal(await page.locator('[data-open]').count(),1);await page.locator('#library-search').fill('inexistente');await page.waitForTimeout(200);assert.equal(await page.locator('[data-open]').count(),0);await page.locator('#library-search').fill('');
   await page.reload();await page.waitForSelector('[data-open]');await page.locator('[data-open]').first().click();await page.waitForTimeout(400);assert.equal(await page.locator('.page').count(),3);assert(await page.locator('.page .ink-vector path').count()>=count);
-  assert(await page.locator('.page .ink-vector path[data-ink-engine="perfect-freehand"]').count()>0,'O contorno novo é preservado depois de reabrir o caderno');
+  assert(await page.locator('.page .ink-vector path[data-ink-engine="continuous"]').count()>0,'O contorno novo é preservado depois de reabrir o caderno');
   // Formas: manter a ponta parada por 650 ms ajusta uma linha.
   await page.locator('.page').first().scrollIntoViewIfNeeded();r=await page.locator('.page').first().boundingBox();await page.mouse.move(r.x+130,r.y+100);await page.mouse.down();await page.mouse.move(r.x+330,r.y+103,{steps:35});await page.waitForTimeout(850);await page.mouse.up();await page.waitForTimeout(100);
   assert.match(await page.locator('#toast').innerText(),/ajustada/);
