@@ -484,7 +484,7 @@ function buildTray(){
   h+=`<span class="sep"></span><button class="tool" data-tapetool aria-pressed="${S.active==='tape'}" aria-label="Fita${S.active==='tape'?'. Toque de novo para ajustar':''}" title="Fita${S.active==='tape'?' — toque de novo para ajustar':''}">${ico('tape')}</button><button class="tool" data-laser aria-pressed="${S.active==='laser'}" aria-label="Caneta laser" title="Caneta laser: o traço some sozinho">${ico('laser')}</button><button class="tool" data-lasso aria-pressed="${S.active==='lasso'}" aria-label="Laço" title="Laço: contorne para selecionar">${ico('lasso')}</button><button class="tool" data-texttool aria-pressed="${S.active==='text'}" aria-label="Texto" title="Texto: toque na folha para escrever com o Rabiscar ou digitar">${ico('text')}</button><button class="tool" data-eraser aria-pressed="${S.active==='eraser'}" aria-label="Borracha${S.active==='eraser'?'. Toque de novo para ajustar':''}" title="Borracha (E)${S.active==='eraser'?' — toque de novo para ajustar':''}">${ico('eraser')}</button>
       <span class="sep"></span>
       <button class="tool" id="undo" aria-label="Desfazer" title="Desfazer (Ctrl+Z)">${ico('undo')}</button><button class="tool" id="redo" aria-label="Refazer" title="Refazer (Ctrl+Shift+Z)">${ico('redo')}</button><span class="sep"></span>
-      <button class="tool" id="finger" aria-pressed="${S.finger}" aria-label="Escrever com o dedo" title="${S.finger?'O dedo escreve. Use dois dedos para rolar.':'O dedo rola a página.'}">${ico('finger')}</button>`;
+      <button class="tool" id="finger" aria-pressed="${!S.finger}" aria-label="Mover página com o dedo" title="${S.finger?'O dedo escreve. Use dois dedos para rolar.':'O dedo rola a página.'}">${ico('finger')}</button>`;
   t.innerHTML=h;
   t.querySelectorAll('[data-pen]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.pen;
@@ -609,6 +609,7 @@ function eraserDialog(){
 const touches=new Map();let act=null,gest=null,pan=null,penUpAt=0,inertia=0;
 const pvals=new Set();
 function notePen(e){
+  if(S.penDevice&&S.finger){S.finger=false;saveDevice();buildTray()}
   if(!S.penDevice){S.penDevice=true;S.finger=false;saveDevice();buildTray();toast('Caneta detectada. A partir de agora só a caneta escreve; o dedo rola e dois dedos dão zoom.',5000)}
   if(!S.realPressure&&e.pressure>0&&e.pressure<1&&Math.abs(e.pressure-.5)>.004){pvals.add(Math.round(e.pressure*100));const v=[...pvals];if(pvals.size>=15&&Math.max(...v)-Math.min(...v)>=30){S.realPressure=true;saveDevice()}}
 }
@@ -622,9 +623,9 @@ sc.addEventListener('pointerdown',e=>{
   if(S.loading||e.target.closest('.tedit'))return;
   if(e.pointerType==='touch'){
     if(act&&act.pen)return;
-    if((e.width||0)>48||(e.height||0)>48)return;
-    stopInertia();
-    touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if((e.width||0)>60&&(e.height||0)>60)return;
+    e.preventDefault();stopInertia();
+    touches.set(e.pointerId,{x:e.clientX,y:e.clientY,target:e.target});
     try{sc.setPointerCapture(e.pointerId)}catch(_){}
     if(touches.size>=2){if(act)cancelStroke();pan=null;startGesture();return}
     if(S.sel&&touches.size===1){const sh=selHit(e);if(sh){beginSelDrag(e,sh);return}}
@@ -670,7 +671,8 @@ function pushPt(x,y,ev){
 sc.addEventListener('pointermove',e=>{
   if(e.pointerType==='pen'&&pan?.id===e.pointerId){pan=null;touches.delete(e.pointerId);stopInertia();notePen(e);startStroke(e)}
   if(e.pointerType==='touch'&&touches.has(e.pointerId)){
-    touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    touches.set(e.pointerId,{...touches.get(e.pointerId),x:e.clientX,y:e.clientY});
+    e.preventDefault();
     if(gest){moveGesture();return}
     if(pan&&pan.id===e.pointerId){const dx=e.clientX-pan.x,dy=e.clientY-pan.y,dt=Math.max(1,e.timeStamp-pan.t);
       sc.scrollBy(-dx,-dy);pan.vx=pan.vx*.5+(-dx/dt)*.5;pan.vy=pan.vy*.5+(-dy/dt)*.5;pan.x=e.clientX;pan.y=e.clientY;pan.t=e.timeStamp;return}
@@ -722,10 +724,7 @@ function commitStroke(a){
   hwrStroke(a.pg,a.st);
 }
 function endPointer(e){
-  if(e.pointerType==='touch'){touches.delete(e.pointerId);if(gest&&touches.size<2)endGesture();
-    if(pan&&pan.id===e.pointerId){
-      if(Math.hypot(e.clientX-pan.sx,e.clientY-pan.sy)<8&&e.timeStamp-pan.t0<350){const pe=pan.target.closest&&pan.target.closest('.page');if(pe){const [x,y]=toLocal(pe._pg,e);const t=tapeAt(pe._pg,x,y);if(t)toggleTape(pe._pg,t)}}
-      else startInertia(pan.vx,pan.vy,e.timeStamp-pan.t);pan=null}}
+  if(e.pointerType==='touch')releaseTouch(e,true);
   if(!act||e.pointerId!==act.pid)return;
   if(act.pen)penUpAt=performance.now();
   const a=act;act=null;
@@ -743,11 +742,29 @@ function endPointer(e){
   commitStroke(a);
 }
 sc.addEventListener('pointerup',endPointer);
-sc.addEventListener('lostpointercapture',e=>{if(act?.pid===e.pointerId)endPointer(e);if(pan?.id===e.pointerId)pan=null;touches.delete(e.pointerId);if(gest&&touches.size<2)endGesture()});
+sc.addEventListener('lostpointercapture',e=>{if(act?.pid===e.pointerId)endPointer(e);releaseTouch(e,false)});
 sc.addEventListener('pointercancel',e=>{
   if(act&&e.pointerId===act.pid){if(act.pen)penUpAt=performance.now();cancelStroke()}
-  if(e.pointerType==='touch'){touches.delete(e.pointerId);if(gest&&touches.size<2)endGesture();if(pan&&pan.id===e.pointerId)pan=null}
+  releaseTouch(e,false);
 });
+/* Ao tirar um dedo da pinça, o dedo que ficou continua arrastando.
+   Encerramentos duplicados (up + lostcapture) não alteram o novo gesto. */
+function releaseTouch(e,allowInertia){
+  if(!touches.has(e.pointerId))return;
+  touches.delete(e.pointerId);
+  if(gest){
+    endGesture();
+    if(touches.size>=2)startGesture();
+    else if(touches.size===1){const [id,t]=touches.entries().next().value;pan={id,x:t.x,y:t.y,sx:t.x,sy:t.y,t0:e.timeStamp,t:e.timeStamp,vx:0,vy:0,target:t.target}}
+    return;
+  }
+  if(pan?.id!==e.pointerId)return;
+  const a=pan;pan=null;
+  if(allowInertia){
+    if(Math.hypot(e.clientX-a.sx,e.clientY-a.sy)<8&&e.timeStamp-a.t0<350){const pe=a.target.closest?.('.page');if(pe){const [x,y]=toLocal(pe._pg,e),t=tapeAt(pe._pg,x,y);if(t)toggleTape(pe._pg,t)}}
+    else startInertia(a.vx,a.vy,e.timeStamp-a.t);
+  }
+}
 function cancelStroke(){
   if(!act)return;const a=act;act=null;clearTimeout(a.holdT);if(a.seld){endSelDrag(a);return}if(a.tape){renderTapes(a.pg);return}if(a.laser){a.laser.end=performance.now();return}liveClear();
   if(a.eraser){
@@ -772,7 +789,8 @@ function moveGesture(){
   if(!g.pinch){
     sc.scrollBy(g.lmx-t.mx,g.lmy-t.my);g.lmx=t.mx;g.lmy=t.my;
     if(Math.abs(t.d/g.d0-1)>.06){const r=sc.getBoundingClientRect();
-      Object.assign(g,{pinch:true,d0:t.d,m0x:t.mx,m0y:t.my,cx:sc.scrollLeft+t.mx-r.left,cy:sc.scrollTop+t.my-r.top,z0:S.zoom,scale:1,mx:t.mx,my:t.my});
+      const pg=S.pages.reduce((best,p)=>Math.abs(p.el.getBoundingClientRect().top-t.my)<Math.abs(best.el.getBoundingClientRect().top-t.my)?p:best,S.pages[0]);const pr=pg.el.getBoundingClientRect();
+      Object.assign(g,{pg,fx:(t.mx-pr.left)/pr.width,fy:(t.my-pr.top)/pr.height,pinch:true,d0:t.d,m0x:t.mx,m0y:t.my,cx:sc.scrollLeft+t.mx-r.left,cy:sc.scrollTop+t.my-r.top,z0:S.zoom,scale:1,mx:t.mx,my:t.my});
       $('#pages').style.transformOrigin=g.cx+'px '+g.cy+'px'}
     return;
   }
@@ -783,7 +801,7 @@ function endGesture(){
   const g=gest;gest=null;const pages=$('#pages');pages.style.transform='';pages.style.transformOrigin='';
   if(!g||!g.pinch)return;
   const r=sc.getBoundingClientRect(),z=g.z0*g.scale,ratio=z/S.zoom;
-  S.zoom=z;layout();sc.scrollLeft=g.cx*ratio-(g.mx-r.left);sc.scrollTop=g.cy*ratio-(g.my-r.top);renderVisible();
+  S.zoom=z;layout();const pr=g.pg.el.getBoundingClientRect();sc.scrollLeft+=pr.left+g.fx*pr.width-g.mx;sc.scrollTop+=pr.top+g.fy*pr.height-g.my;renderVisible();
 }
 function segDist(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy;let t=l?((px-ax)*dx+(py-ay)*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-ax-t*dx,py-ay-t*dy)}
 function hits(s,x,y,R){const st=s.s||2,p=s.p,n=p.length/st,rad=R+s.w/2;

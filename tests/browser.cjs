@@ -61,6 +61,23 @@ async function main(){
    fire('pointerdown',903,'pen',x,y);fire('pointermove',903,'pen',x+40,y+10);fire('pointerup',903,'pen',x+40,y+10);
    Ink.svg=originalSvg;return {wrote,moved,capturedPressure};
   });assert.equal(navigation.capturedPressure,60,'Pressão da primeira escrita é usada sem esperar calibração');assert(navigation.wrote,'A caneta escreve');assert(navigation.moved,'O dedo move o papel imediatamente após levantar a caneta');
+  const handoff=await page.evaluate(()=>{
+   const surface=document.querySelector('.page'),sc=document.querySelector('#scroller');sc.scrollTop=300;
+   const fire=(type,id,x,y)=>surface.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType:'touch',clientX:x,clientY:y,width:18,height:18}));
+   fire('pointerdown',910,280,450);fire('pointerdown',911,480,450);
+   fire('pointermove',910,280,400);fire('pointermove',911,480,400);
+   fire('pointerup',911,480,400);fire('lostpointercapture',911,480,400);
+   const before=sc.scrollTop;fire('pointermove',910,280,340);const delta=sc.scrollTop-before;
+   fire('pointercancel',910,280,340);
+   fire('pointerdown',912,280,400);const next=sc.scrollTop;fire('pointermove',912,280,350);const resumed=sc.scrollTop-next;fire('pointercancel',912,280,350);
+   fire('pointerdown',913,300,400);fire('pointerdown',914,500,400);
+   fire('pointermove',913,240,400);
+   const pr=surface.getBoundingClientRect(),fx=(370-pr.left)/pr.width,fy=(400-pr.top)/pr.height;
+   fire('pointermove',914,560,400);fire('pointerup',914,560,400);
+   const after=surface.getBoundingClientRect(),anchorError=Math.hypot(after.left+fx*after.width-400,after.top+fy*after.height-400);
+   const pinchTop=sc.scrollTop;fire('pointermove',913,240,350);const afterPinch=sc.scrollTop-pinchTop;fire('pointercancel',913,240,350);
+   return {delta,resumed,anchorError,afterPinch};
+  });assert.equal(handoff.delta,60,'O dedo restante continua movendo a página após gesto com dois dedos');assert.equal(handoff.resumed,50,'Arraste funciona após cancelamento do navegador');assert(handoff.anchorError<2,'Zoom mantém o ponto sob os dedos');assert.equal(handoff.afterPinch,50,'Arraste continua após pinça com zoom');
   await page.screenshot({path:'/tmp/caderno-vector-desktop.png'});
   await page.getByRole('button',{name:'Voltar para os cadernos'}).click();await page.waitForSelector('#library:not([hidden])');
   await page.locator('[data-opts]').first().click();await page.locator('#nb-folder').fill('Estudos');await page.locator('#nb-favorite').check();await page.getByRole('button',{name:'Salvar',exact:true}).click();
