@@ -39,6 +39,7 @@ async function main(){
   console.log('Verificando exportação offline');
   // A página e os geradores locais de PDF continuam disponíveis offline.
   await context.setOffline(true);await page.reload();await page.waitForSelector('[data-open]');await page.locator('[data-open]').first().click();await page.waitForFunction(()=>!window.__inspection.S.loading);
+  assert(await page.evaluate(()=>typeof window.PerfectFreehand?.getStroke==='function'),'O motor de tinta está disponível offline');
   await page.getByRole('button',{name:'Mais opções'}).click();const pdfDownload=page.waitForEvent('download');await page.getByRole('menuitem',{name:'Exportar em PDF'}).click();const pdf=await pdfDownload;assert(pdf.suggestedFilename().endsWith('.pdf'));assert(fs.statSync(await pdf.path()).size>1000);
   assert.deepEqual(errors,[]);console.log('OK: falha de salvamento, formas, fitas em lote, limpar/desfazer, backup, colisões de IDs, reabertura offline e exportação PDF offline.');await context.close();
  }finally{await browser.close();await new Promise(r=>server.close(r))}

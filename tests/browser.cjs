@@ -14,6 +14,7 @@ async function main(){
   const target=page.locator('.page').first();let r=await target.boundingBox();
   await page.mouse.move(r.x+220,r.y+150);await page.mouse.down();await page.mouse.move(r.x+390,r.y+260,{steps:35});await page.mouse.up();
   const count=await page.locator('.page .ink-vector path').count();assert(count>0);
+  assert(await page.locator('.page .ink-vector path[fill="#1c1d24"]').count()>0,'O novo traço usa o contorno preenchido de perfect-freehand');
   await page.getByRole('button',{name:'Páginas',exact:true}).click();await page.getByRole('button',{name:'Duplicar página 1',exact:true}).click();assert.equal(await page.locator('.page-card').count(),3);
   await page.getByRole('button',{name:'Mover página 1 para baixo',exact:true}).click();await page.getByRole('button',{name:'Fechar',exact:true}).click();assert.equal(await page.locator('.page').count(),3);
   await page.getByRole('button',{name:'Escrita ampliada',exact:true}).click();await page.waitForTimeout(200);assert(await page.locator('#writing-focus').isVisible());
@@ -24,6 +25,7 @@ async function main(){
   await page.locator('[data-opts]').first().click();await page.locator('#nb-folder').fill('Estudos');await page.locator('#nb-favorite').check();await page.getByRole('button',{name:'Salvar',exact:true}).click();
   await page.locator('#library-folder').selectOption('Estudos');await page.locator('#library-favorites').click();assert.equal(await page.locator('[data-open]').count(),1);await page.locator('#library-search').fill('inexistente');await page.waitForTimeout(200);assert.equal(await page.locator('[data-open]').count(),0);await page.locator('#library-search').fill('');
   await page.reload();await page.waitForSelector('[data-open]');await page.locator('[data-open]').first().click();await page.waitForTimeout(400);assert.equal(await page.locator('.page').count(),3);assert(await page.locator('.page .ink-vector path').count()>=count);
+  assert(await page.locator('.page .ink-vector path[fill="#1c1d24"]').count()>0,'O contorno novo é preservado depois de reabrir o caderno');
   // Formas: manter a ponta parada por 650 ms ajusta uma linha.
   await page.locator('.page').first().scrollIntoViewIfNeeded();r=await page.locator('.page').first().boundingBox();await page.mouse.move(r.x+130,r.y+100);await page.mouse.down();await page.mouse.move(r.x+330,r.y+103,{steps:35});await page.waitForTimeout(850);await page.mouse.up();await page.waitForTimeout(100);
   assert.match(await page.locator('#toast').innerText(),/ajustada/);

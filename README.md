@@ -14,6 +14,7 @@ Os cadernos ficam guardados no próprio aparelho. Use o botão **Backup** de vez
 ## Escrever e estudar
 
 - A esferográfica, a caneta fina e o marca-texto de fluxo cheio são exibidos como curvas vetoriais, durante e depois da escrita. O zoom não depende da resolução do canvas de fundo. Pincéis com textura preservam o motor de tinta e são renderizados em imagens individuais de alta resolução.
+- Novos traços livres usam **perfect-freehand 1.2.3** para construir o contorno: espessura constante nas canetas uniformes e variação de pressão nos pincéis. A estabilização da captura continua no app, sem adicionar outro filtro de atraso. A mesma geometria é usada na prévia, no desenho salvo, na janela ampliada e na exportação. Traços anteriores preservam o motor original; formas, tracejados e marca-texto mantêm seu comportamento específico.
 - **Páginas** no estojo abre miniaturas para navegar, duplicar, mover e apagar folhas.
 - **Escrita ampliada** abre uma faixa para escrever maior na mesma folha. Toque na página para posicionar a região; as setas e **Próxima linha** deslocam a área.
 - **Formas automáticas** no estojo: desenhe uma linha, um retângulo ou uma elipse e mantenha a ponta parada por um instante. O ajuste pode ser desfeito. O botão liga e desliga o recurso.
@@ -32,5 +33,5 @@ Para os testes de navegador, instale as dependências com `npm install`, prepare
 
 Os testes verificam edição, zoom, formas, janela ampliada, páginas, biblioteca, importação de PDF, salvamento, backup e uso offline. Apple Pencil, rejeição da palma e a aparência das bordas ainda precisam ser conferidos no Safari de um iPad real.
 
-Dependências incluídas: PDF.js 3.11.174 (Apache-2.0, licença em `vendor/LICENSE-pdfjs.txt`) e jsPDF 2.5.1 (MIT, aviso preservado no arquivo). O leitor de PDF funciona com avaliação dinâmica desativada.
+Dependências incluídas: [perfect-freehand 1.2.3](https://github.com/steveruizok/perfect-freehand), de Steve Ruiz (MIT, licença em `vendor/LICENSE-perfect-freehand.txt`); PDF.js 3.11.174 (Apache-2.0, licença em `vendor/LICENSE-pdfjs.txt`); e jsPDF 2.5.1 (MIT, aviso preservado no arquivo). O leitor de PDF funciona com avaliação dinâmica desativada. O arquivo do perfect-freehand é o bundle CommonJS distribuído no npm, envolvido em uma função que publica `window.PerfectFreehand`, com o aviso MIT preservado; não há dependência de CDN.
 

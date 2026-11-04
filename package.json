@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.1.0",
   "scripts": {
-    "test": "node tests/browser.cjs && node tests/integrity.cjs"
+    "test": "node tests/ink.cjs && node tests/browser.cjs && node tests/integrity.cjs"
   },
   "devDependencies": {
     "playwright": "^1.55.0"

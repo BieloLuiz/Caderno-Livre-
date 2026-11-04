@@ -529,7 +529,7 @@ function previewStroke(cv,pen){
     pts.push(Math.round(sm[0]*10)/10,Math.round(sm[1]*10)/10);if(st===3)pts.push(Math.round(pr*100));
   }
   for(const q of stab.finish(last[0],last[1])){pts.push(Math.round(q[0]*10)/10,Math.round(q[1]*10)/10);if(st===3)pts.push(Math.round(pr*100))}
-  Ink.draw(ctx,{t:pen.k==='hl'?'hl':'pen',k:pen.k,c:pen.c,w:pen.w,o:pen.o,f:pen.f,ls:pen.k==='hl'?undefined:pen.ls,s:st,p:pts,_live:true},k);
+  Ink.draw(ctx,{engine:Ink.ENGINE,t:pen.k==='hl'?'hl':'pen',k:pen.k,c:pen.c,w:pen.w,o:pen.o,f:pen.f,ls:pen.k==='hl'?undefined:pen.ls,s:st,p:pts,_live:true},k);
 }
 function swatchesHTML(list,cur,id){
   const inList=list.some(c=>c[0].toLowerCase()===cur.toLowerCase());
@@ -654,7 +654,7 @@ function startStroke(e){
   const pen=activePen(),K=KINDS[pen.k];
   const hasTilt=isPen&&tiltOf(e)[0]<88;
   const stride=K.shape==='line'?2:(hasTilt?5:3);
-  const st={id:uid(),t:pen.k==='hl'?'hl':'pen',k:pen.k,c:pen.c,w:pen.w,o:pen.o,f:pen.f,s:stride,p:[],_live:true};
+  const st={id:uid(),engine:Ink.ENGINE,t:pen.k==='hl'?'hl':'pen',k:pen.k,c:pen.c,w:pen.w,o:pen.o,f:pen.f,s:stride,p:[],_live:true};
   act={pid:e.pointerId,pg,pen:isPen,st,stab:new Ink.Stabilizer(pen.st,LW/pageCssW),lx:x,ly:y,px:x,py:y,rx:x,ry:y,lt:e.timeStamp,pr:.62,
     real:isPen&&S.realPressure,pred:null,hx:x,hy:y,eps:(.08+pen.st/100*.2)*LW/pageCssW};
   if(act.real)st.rp=1;
@@ -704,7 +704,7 @@ let liveF=0;
 /* Traço em andamento: desenhado no próximo quadro, com um pequeno trecho
    "previsto" pelo navegador quando disponível, para reduzir o atraso visual. */
 function drawLive(){if(liveF)return;liveF=requestAnimationFrame(()=>{liveF=0;if(!act||act.eraser)return;
-  liveClear();let s=act.st;if(!act.snapped)s={...s,p:Ink.simplify(s.p,s.s,act.eps)};
+  liveClear();let s=act.st;if(!act.snapped&&s.engine!==Ink.ENGINE)s={...s,p:Ink.simplify(s.p,s.s,act.eps)};
   if(act.pred){const st=s.s,p=s.p.slice(-st);p[0]=Math.round(act.pred[0]*10)/10;p[1]=Math.round(act.pred[1]*10)/10;s={...s,p:s.p.concat(p)}}
   const vector=Ink.svg(s);if(vector!==null)liveSvg.innerHTML=vector;else Ink.draw(liveCv.getContext('2d'),s,liveCv.width/LW)})}
 function armHold(a){clearTimeout(a.holdT);a.holdT=setTimeout(()=>{tryLoopSelect(a);if(act===a&&S.shapes)tryShape(a)},650)}
@@ -714,7 +714,7 @@ function commitStroke(a){
   if(!a.st.p.length)return;
   if(a.tapeHit){const b=Ink.geom(a.st).box;if(Math.hypot(b[2]-b[0],b[3]-b[1])-a.st.w<5){toggleTape(a.pg,a.tapeHit);return}}
   if(tryScratch(a.pg,a.st))return;
-  if(!a.snapped)a.st.p=Ink.simplify(a.st.p,a.st.s,a.eps);
+  if(!a.snapped&&a.st.engine!==Ink.ENGINE)a.st.p=Ink.simplify(a.st.p,a.st.s,a.eps);
   a.pg.strokes.push(a.st);
   appendInkSvg(a.pg,a.st);
   pushUndo({pg:a.pg.id,added:[a.st],removed:[]});schedulePageSave(a.pg);
@@ -1633,7 +1633,7 @@ function wireFocus(){
     if(!focusState||focusStroke||e.button>0)return;if(e.pointerType==='touch'&&S.penDevice)return;
     const pen=activePen();if(!pen){toast('Escolha uma caneta no estojo para escrever nesta janela.');return}
     e.preventDefault();surface.setPointerCapture(e.pointerId);if(e.pointerType==='pen')notePen(e);const [x,y]=focusPoint(e);
-    focusStroke={pid:e.pointerId,pg:focusState.pg,x,y,stab:new Ink.Stabilizer(pen.st,1/focusState.scale),st:{...pen,id:uid(),t:pen.k==='hl'?'hl':'pen',s:3,p:[x,y,Math.round((e.pressure||.62)*100)],_live:true}};refreshFocus();
+    focusStroke={pid:e.pointerId,pg:focusState.pg,x,y,stab:new Ink.Stabilizer(pen.st,1/focusState.scale),st:{...pen,id:uid(),engine:Ink.ENGINE,t:pen.k==='hl'?'hl':'pen',s:3,p:[x,y,Math.round((e.pressure||.62)*100)],_live:true}};refreshFocus();
   });
   surface.addEventListener('pointermove',e=>{const a=focusStroke;if(!a||a.pid!==e.pointerId)return;e.preventDefault();const events=e.getCoalescedEvents?.();for(const ev of events?.length?events:[e]){const [x,y]=focusPoint(ev);a.x=x;a.y=y;const q=a.stab.push(x,y);if(q)a.st.p.push(q[0],q[1],Math.round((ev.pressure||.62)*100))}refreshFocus()});
   surface.addEventListener('pointerup',e=>{if(focusStroke?.pid===e.pointerId)finishFocusStroke()});surface.addEventListener('pointercancel',e=>{if(focusStroke?.pid===e.pointerId)finishFocusStroke(true)});

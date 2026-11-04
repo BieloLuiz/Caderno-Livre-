@@ -21,6 +21,8 @@ const ORDER=['esfero','fina','tinteiro','pincel','lapis','hl'];
 const kindOf=s=>s.k&&KINDS[s.k]?s.k:(s.t==='hl'?'hl':'esfero');
 const alphaOf=s=>s.o!=null?s.o:KINDS[kindOf(s)].o;
 const flowOf=s=>s.f!=null?s.f:100;   // traços antigos: tinta cheia
+const ENGINE='perfect-freehand-1.2.3';
+const usesPerfect=s=>s.engine===ENGINE&&!s.shape&&kindOf(s)!=='hl'&&!['dot','dash'].includes(s.ls)&&!!window.PerfectFreehand;
 
 /* ---------- Estabilizador ----------
    Duas etapas com efeitos diferentes:
@@ -64,6 +66,7 @@ class Stabilizer{
 function samplesOf(s){
   const st=s.s||2,p=s.p,n=p.length/st;
   const X=[],Y=[],P=[],A=[],Z=[];
+  if(usesPerfect(s)){for(let i=0;i<n;i++){X.push(p[i*st]);Y.push(p[i*st+1]);P.push(st>=3?clamp(p[i*st+2]/100,0,1):.5);A.push(st>=5?p[i*st+3]:90);Z.push(st>=5?p[i*st+4]:45)}return {X,Y,P,A,Z}}
   if(s.shape==='line'||s.shape==='rectangle'){for(let i=0;i<n;i++){X.push(p[i*st]);Y.push(p[i*st+1]);P.push(.5);A.push(90);Z.push(45)}return {X,Y,P,A,Z}}
   const get=(i,j)=>p[clamp(i,0,n-1)*st+j];
   const pr=i=>st>=3?get(i,2)/100:.5, al=i=>st>=5?get(i,3):90, az=i=>st>=5?get(i,4):45;
@@ -187,6 +190,13 @@ function linePath(S,sharp=false){
 /* Cache: a geometria de cada traço é calculada uma vez e reaproveitada em
    qualquer zoom (o desenho é vetorial; o zoom só muda a escala). */
 const cache=new WeakMap();
+function outlinePath(points){
+  if(!points.length)return '';
+  const num=v=>Number(v.toFixed(4)),mid=(a,b)=>num((a+b)/2),n=points.length;
+  let d=`M${mid(points[n-1][0],points[0][0])} ${mid(points[n-1][1],points[0][1])}`;
+  for(let i=0;i<n;i++){const p=points[i],next=points[(i+1)%n];d+=` Q${num(p[0])} ${num(p[1])} ${mid(p[0],next[0])} ${mid(p[1],next[1])}`}
+  return d+' Z';
+}
 function geom(s){
   let g=cache.get(s);if(g)return g;
   const kind=kindOf(s),K=KINDS[kind],S=samplesOf(s);
@@ -194,9 +204,19 @@ function geom(s){
   let path,R=null,pad=s.w/2+1;
   const dashed=s.ls==='dot'||s.ls==='dash';
   const uniform=kind==='esfero'||K.shape==='line';
-  if(uniform||dashed)path=linePath(S,s.shape==='line'||s.shape==='rectangle');
+  let outline=null,svgPath=null;
+  if(usesPerfect(s)){
+    if(!uniform)R=radii(s,kind,S);
+    let size=s.w;if(R)for(const radius of R)size=Math.max(size,radius*2);
+    const points=S.X.map((x,i)=>[x,S.Y[i],uniform?S.P[i]:R[i]/size]);
+    outline=window.PerfectFreehand.getStroke(points,{size,thinning:uniform?0:1,smoothing:.65,streamline:0,simulatePressure:false,last:true,start:{cap:true,taper:0},end:{cap:true,taper:0}});
+    svgPath=outlinePath(outline);path=new Path2D(svgPath);
+    x0=y0=Infinity;x1=y1=-Infinity;for(const [x,y] of outline){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}pad=1;
+    if(!outline.length){x0=y0=x1=y1=0}
+  }
+  else if(uniform||dashed)path=linePath(S,s.shape==='line'||s.shape==='rectangle');
   else{R=radii(s,kind,S);path=stampPath(S,R);let m=0;for(const r of R)if(r>m)m=r;pad=m+1}
-  g={kind,S,R,path,dashed,uniform,box:[x0-pad,y0-pad,x1+pad,y1+pad]};
+  g={kind,S,R,path,dashed,uniform,outline,svgPath,box:[x0-pad,y0-pad,x1+pad,y1+pad]};
   if(Object.isFrozen(s)||!s._live)cache.set(s,g);
   return g;
 }
@@ -220,7 +240,8 @@ function draw(ctx,s,k,ox,oy){
   const tx=-(ox||0)*k,ty=-(oy||0)*k;
   const simple=a>=1&&f>=.995&&g.kind!=='lapis';
   const paint=(c)=>{
-    if(g.dashed){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;
+    if(g.outline){c.fillStyle=s.c;c.fill(g.path)}
+    else if(g.dashed){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;
       c.setLineDash(s.ls==='dot'?[.001,s.w*2.8]:[s.w*5,s.w*3.6]);c.stroke(g.path);c.setLineDash([])}
     else if(g.uniform){c.lineCap='round';c.lineJoin='round';c.lineWidth=s.w;c.strokeStyle=s.c;c.stroke(g.path)}
     else{c.fillStyle=s.c;c.fill(g.path)}
@@ -259,7 +280,9 @@ function invalidate(s){cache.delete(s)}
    fundo já atingiu o limite de memória. Texturas continuam no motor raster. */
 function svg(s){
   const g=geom(s),K=KINDS[g.kind],f=flowOf(s)/100;
-  if(!g.uniform||K.grain*(1-f)*1.6>.02)return null;
+  const grain=g.kind==='lapis'?K.grain*(1.15-f*.55):K.grain*(1-f)*1.6;
+  if((!g.uniform&&!g.outline)||grain>.02)return null;
+  if(g.svgPath){const color=/^#[0-9a-f]{6}$/i.test(s.c)?s.c:'#1c1d24';return `<path d="${g.svgPath}" fill="${color}" opacity="${clamp(alphaOf(s),0,1)}"/>`}
   const S=g.S,n=S.X.length;if(!n)return '';
   const num=v=>Number(v.toFixed(4));
   let d=`M${num(S.X[0])} ${num(S.Y[0])}`;
@@ -301,6 +324,6 @@ function drawTape(ctx,t,k,revealed){
   ctx.restore();
 }
 
-window.Ink={KINDS,ORDER,kindOf,alphaOf,flowOf,Stabilizer,draw,svg,geom,invalidate,simplify,drawTape,TAPE_ALPHA};
+window.Ink={ENGINE,KINDS,ORDER,kindOf,alphaOf,flowOf,Stabilizer,draw,svg,geom,invalidate,simplify,drawTape,TAPE_ALPHA};
 })();
 
