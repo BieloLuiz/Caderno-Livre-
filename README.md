@@ -2,7 +2,7 @@
 
 Caderno de anotações à mão para iPad, celular e computador. Funciona no navegador, instala como app e funciona sem internet.
 
-**Abrir:** https://bieloluiz.github.io/caderno-livre-/
+**Abrir:** https://bieloluiz.github.io/Caderno-Livre-/
 
 ## Instalar no iPad
 1. Abra o endereço acima no **Safari**.
