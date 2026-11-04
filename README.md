@@ -40,4 +40,4 @@ As canetas uniformes do motor perfect-freehand usam a linha central contínua co
 
 Correção de continuidade: esferográfica e caneta fina usam a curva contínua anterior, independentemente da marca do motor nos dados salvos. Fluxo muda a opacidade nessas canetas, sem apagar textura. Perfect Freehand permanece nas ferramentas de largura variável. O arquivo do motor tem URL versionada para atualizar o cache do navegador.
 
-Estabilização refinada: raio máximo reduzido de 9 para 4 pixels de tela e resposta adaptativa mais rápida. Preserva voltas pequenas e reduz a distância entre ponta e tinta. A alteração atua apenas na captura de novos traços.
+Estabilização restaurada para os parâmetros da versão continuous-3, validada no iPad pelo usuário.

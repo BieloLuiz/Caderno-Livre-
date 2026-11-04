@@ -35,8 +35,8 @@ const usesPerfect=s=>!isContinuous(s)&&s.engine===ENGINE&&!s.shape&&kindOf(s)!==
 class Stabilizer{
   constructor(strength,unitsPerPx){
     const s=clamp(strength,0,100)/100;this.s=s;this.upp=unitsPerPx||1;
-    this.r=s*s*4*this.upp;          // até 4 px de tela: preserva voltas pequenas
-    this.amin=1-s*0.65;             // peso mínimo do ponto novo
+    this.r=s*s*9*this.upp;          // até 9 px de tela
+    this.amin=1-s*0.78;             // peso mínimo do ponto novo
     this.bx=null;
   }
   push(x,y){
@@ -47,7 +47,7 @@ class Stabilizer{
       const m=(d-this.r)/d;this.bx+=dx*m;this.by+=dy*m;
     }else{this.bx=x;this.by=y}
     const sp=Math.hypot(this.bx-this.sx,this.by-this.sy)/this.upp; // px de tela
-    const a=Math.min(1,this.amin+sp*0.09);
+    const a=Math.min(1,this.amin+sp*0.045);
     this.sx+=(this.bx-this.sx)*a;this.sy+=(this.by-this.sy)*a;
     return [this.sx,this.sy];
   }
